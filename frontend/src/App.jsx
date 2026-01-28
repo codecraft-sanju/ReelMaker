@@ -135,6 +135,9 @@ export default function App() {
   // Timer Refs
   const timerRef = useRef(null);
   const scrollRef = useRef(null);
+  
+  // NEW: Ref for the Preview Section (Video Area)
+  const previewRef = useRef(null);
 
   // --- Logic ---
 
@@ -170,6 +173,13 @@ export default function App() {
     if (frames.length === 0) return;
     setIsPlaying(true);
     setCurrentFrameIndex(0);
+    
+    // UPDATED: Mobile Scroll Logic
+    // Agar screen choti hai (mobile), toh preview area pe scroll kar do
+    if (window.innerWidth < 1024 && previewRef.current) {
+      previewRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     triggerFrame(0);
   };
 
@@ -177,6 +187,15 @@ export default function App() {
     setIsPlaying(false);
     setCurrentFrameIndex(-1);
     clearTimeout(timerRef.current);
+  };
+  
+  // New: Click on video to toggle Play/Stop
+  const togglePlay = () => {
+    if (isPlaying) {
+      handleStop();
+    } else {
+      handlePlay();
+    }
   };
 
   const triggerFrame = (index) => {
@@ -262,40 +281,22 @@ export default function App() {
 
             {/* Modal Content */}
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto custom-scrollbar">
-              
-              {/* Plan 1: Monthly */}
               <PricingCard 
                 title="Creator Monthly" 
                 price="400" 
                 period="mo" 
                 recommended={false}
-                features={[
-                  "Remove Watermark",
-                  "1080p HD Exports",
-                  "Access to 50+ Premium Fonts",
-                  "Unlock all 12 Animation Styles",
-                  "Priority Email Support"
-                ]}
+                features={[ "Remove Watermark", "1080p HD Exports", "Access to 50+ Premium Fonts", "Unlock all 12 Animation Styles", "Priority Email Support" ]}
                 onSelect={() => handleSubscribe('Creator Monthly')}
               />
-
-              {/* Plan 2: Yearly */}
               <PricingCard 
                 title="Empire Yearly" 
                 price="700" 
                 period="yr" 
                 recommended={true}
-                features={[
-                  "Everything in Creator Monthly",
-                  "4K Ultra HD Exports",
-                  "AI Voiceover Generation (Unlimited)",
-                  "Custom Brand Kit (Logos & Colors)",
-                  "Early Access to Beta Features",
-                  "Save ₹4,100 per year!"
-                ]}
+                features={[ "Everything in Creator Monthly", "4K Ultra HD Exports", "AI Voiceover Generation (Unlimited)", "Custom Brand Kit (Logos & Colors)", "Early Access to Beta Features", "Save ₹4,100 per year!" ]}
                 onSelect={() => handleSubscribe('Empire Yearly')}
               />
-
             </div>
 
             <div className="p-4 border-t border-white/5 bg-black/20 text-center">
@@ -330,10 +331,10 @@ export default function App() {
       </header>
 
       {/* --- Main Workspace --- */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 overflow-hidden h-[calc(100vh-64px)]">
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 overflow-hidden lg:h-[calc(100vh-64px)] h-auto">
         
-        {/* LEFT: Editor */}
-        <div className="lg:col-span-5 flex flex-col h-full gap-4 order-2 lg:order-1">
+        {/* LEFT: Editor (Order 2 on Mobile so it's below preview) */}
+        <div className="lg:col-span-5 flex flex-col h-[600px] lg:h-full gap-4 order-2 lg:order-1">
           
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-300">
@@ -425,7 +426,7 @@ export default function App() {
           </div>
 
           {/* Controls */}
-          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 flex gap-4 items-center shadow-2xl z-10">
+          <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 flex gap-4 items-center shadow-2xl z-10 sticky bottom-0 lg:static">
               <button 
                 onClick={isPlaying ? handleStop : handlePlay}
                 className={`
@@ -459,8 +460,12 @@ export default function App() {
           </div>
         </div>
 
-        {/* RIGHT: Preview Area */}
-        <div className="lg:col-span-7 h-full flex flex-col bg-neutral-900/50 rounded-3xl border border-white/5 p-4 lg:p-8 relative order-1 lg:order-2">
+        {/* RIGHT: Preview Area (Order 1 on Mobile so it's at top) */}
+        {/* ADDED: ref={previewRef} here */}
+        <div 
+          ref={previewRef}
+          className="lg:col-span-7 h-auto min-h-[500px] lg:h-full flex flex-col bg-neutral-900/50 rounded-3xl border border-white/5 p-4 lg:p-8 relative order-1 lg:order-2 scroll-mt-20"
+        >
           
           <div className="flex justify-center mb-6">
             <div className="bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/10 flex gap-1">
@@ -484,9 +489,13 @@ export default function App() {
           </div>
 
           <div className="flex-1 flex items-center justify-center overflow-hidden">
-            <div className={`
-              relative w-full transition-all duration-500 ease-in-out bg-black rounded-[2rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col
+            {/* ADDED: onClick={togglePlay} and cursor-pointer */}
+            <div 
+              onClick={togglePlay}
+              className={`
+              relative w-full transition-all duration-500 ease-in-out bg-black rounded-[2rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col cursor-pointer
               ${ASPECT_RATIOS[selectedRatio].containerClass}
+              ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}
             `}>
               
               <div className={`
@@ -532,9 +541,12 @@ export default function App() {
                 ) : (
                   <div className="space-y-6 opacity-40">
                     <div className="w-24 h-24 rounded-full border-4 border-dashed border-gray-600 flex items-center justify-center mx-auto animate-pulse">
-                       <Type className="w-10 h-10 text-gray-500" />
+                        <Type className="w-10 h-10 text-gray-500" />
                     </div>
-                    <p className="text-gray-500 font-medium">Ready to Render</p>
+                    <p className="text-gray-500 font-medium">
+                        {/* Added hint text */}
+                        Tap here or Play below
+                    </p>
                   </div>
                 )}
               </div>
