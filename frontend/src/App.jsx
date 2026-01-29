@@ -4,7 +4,7 @@ import {
   Type, Layers, Image as ImageIcon, Clock, ArrowUp, ArrowDown, 
   Music, Crown, Check, X, Zap, LayoutTemplate, 
   ChevronLeft, Copy, AlignLeft, AlignCenter, AlignRight, Share2, Mic,
-  Library, Sparkles, Eye, Move, RotateCw, Maximize
+  Library, Sparkles, Eye, Move, RotateCw, Maximize, RotateCcw
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -42,9 +42,9 @@ const PRO_TEMPLATES = [
     description: 'Dark theme with heavy stomp animation. Perfect for aggressive quotes.',
     previewColor: 'bg-slate-900',
     frames: [
-      { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
-      { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
-      { id: 103, text: "BUILD IT YOURSELF.", image: "", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1.5, rotation: 0 } }
+      { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
+      { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
+      { id: 103, text: "BUILD IT YOURSELF.", image: "", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1.5, rotation: 0 }, wordLayouts: {} }
     ]
   },
   {
@@ -53,9 +53,9 @@ const PRO_TEMPLATES = [
     description: 'Minimalist white theme with smooth slides. Great for educational content.',
     previewColor: 'bg-white',
     frames: [
-      { id: 201, text: "Here is a secret...", image: "", duration: 2, theme: THEMES[4], animation: ANIMATIONS[1].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
-      { id: 202, text: "Most people fail because they quit too early.", image: "", duration: 3.5, theme: THEMES[4], animation: ANIMATIONS[5].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
-      { id: 203, text: "Don't be most people.", image: "", duration: 2.5, theme: THEMES[4], animation: ANIMATIONS[1].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 } }
+      { id: 201, text: "Here is a secret...", image: "", duration: 2, theme: THEMES[4], animation: ANIMATIONS[1].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
+      { id: 202, text: "Most people fail because they quit too early.", image: "", duration: 3.5, theme: THEMES[4], animation: ANIMATIONS[5].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
+      { id: 203, text: "Don't be most people.", image: "", duration: 2.5, theme: THEMES[4], animation: ANIMATIONS[1].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} }
     ]
   }
 ];
@@ -103,53 +103,71 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT ---
+// --- TRANSFORMABLE TEXT COMPONENT (Enhanced for Word Manipulation) ---
 const TransformableText = ({ 
-  text, theme, animation, align, layout, isSelected, onSelect, onUpdateLayout, isPlaying 
+  text, theme, animation, align, layout, wordLayouts = {}, 
+  isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying 
 }) => {
   const boxRef = useRef(null);
-  const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
+  const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0, type: null, wordIndex: null });
   const isDragging = useRef(false);
-  const isRotating = useRef(false);
-  const isScaling = useRef(false);
 
-  const handleStart = (clientX, clientY, type) => {
+  // Helper to get individual word layout or default
+  const getWordLayout = (index) => {
+    return wordLayouts[index] || { x: 0, y: 0, rotation: 0 };
+  };
+
+  const handleStart = (e, type, wordIndex = null) => {
     if (isPlaying) return;
+    e.stopPropagation(); // Stop event bubbling
     onSelect();
     
-    if (type === 'drag') {
-        isDragging.current = true;
-        dragStart.current = { x: clientX, y: clientY, startX: layout.x, startY: layout.y };
+    // Normalize touch/mouse
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    isDragging.current = true;
+    
+    if (type === 'word-drag' && wordIndex !== null) {
+       const wl = getWordLayout(wordIndex);
+       dragStart.current = { 
+         x: clientX, y: clientY, 
+         startX: wl.x, startY: wl.y, 
+         type: 'word-drag', wordIndex 
+       };
+    } else if (type === 'drag') {
+       dragStart.current = { x: clientX, y: clientY, startX: layout.x, startY: layout.y, type: 'drag' };
     } else if (type === 'rotate') {
-        isRotating.current = true;
-        dragStart.current = { x: clientX, y: clientY, startRotation: layout.rotation };
+       dragStart.current = { x: clientX, y: clientY, startRotation: layout.rotation, type: 'rotate' };
     } else if (type === 'scale') {
-        isScaling.current = true;
-        dragStart.current = { x: clientX, y: clientY, startScale: layout.scale };
+       dragStart.current = { x: clientX, y: clientY, startScale: layout.scale, type: 'scale' };
     }
   };
 
   useEffect(() => {
     const handleMove = (clientX, clientY) => {
-      if (!isDragging.current && !isRotating.current && !isScaling.current) return;
+      if (!isDragging.current) return;
+      const dx = clientX - dragStart.current.x;
+      const dy = clientY - dragStart.current.y;
 
-      if (isDragging.current) {
-        const dx = clientX - dragStart.current.x;
-        const dy = clientY - dragStart.current.y;
+      if (dragStart.current.type === 'word-drag') {
+         // MOVING INDIVIDUAL WORD
+         const idx = dragStart.current.wordIndex;
+         onUpdateWordLayout(idx, {
+            x: dragStart.current.startX + dx,
+            y: dragStart.current.startY + dy
+         });
+      } else if (dragStart.current.type === 'drag') {
+        // MOVING WHOLE CONTAINER
         onUpdateLayout({ x: dragStart.current.startX + dx, y: dragStart.current.startY + dy });
-      }
-
-      if (isRotating.current) {
+      } else if (dragStart.current.type === 'rotate') {
         if (!boxRef.current) return;
         const rect = boxRef.current.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
         const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
         onUpdateLayout({ rotation: angle + 90 }); 
-      }
-
-      if (isScaling.current) {
-         const dy = clientY - dragStart.current.y;
+      } else if (dragStart.current.type === 'scale') {
          const newScale = Math.max(0.2, dragStart.current.startScale + (dy * 0.01));
          onUpdateLayout({ scale: newScale });
       }
@@ -157,17 +175,11 @@ const TransformableText = ({
 
     const handleEnd = () => {
       isDragging.current = false;
-      isRotating.current = false;
-      isScaling.current = false;
+      dragStart.current.type = null;
     };
 
     const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
-    const onTouchMove = (e) => {
-        if (isDragging.current || isRotating.current || isScaling.current) {
-            // Handled by style touch-action: none
-        }
-        handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
+    const onTouchMove = (e) => handleMove(e.touches[0].clientX, e.touches[0].clientY);
 
     if (isSelected) {
       window.addEventListener('mousemove', onMouseMove);
@@ -182,47 +194,76 @@ const TransformableText = ({
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', handleEnd);
     };
-  }, [isSelected, layout, onUpdateLayout]);
+  }, [isSelected, layout, onUpdateLayout, onUpdateWordLayout]);
 
   const smartSize = getSmartFontSize(text.length);
+  const words = text.split(' ');
 
   return (
     <div 
       ref={boxRef}
-      className={`absolute z-20 cursor-move select-none flex items-center justify-center w-full px-8 touch-none`}
+      className={`absolute z-20 flex items-center justify-center w-full px-8 touch-none`}
       style={{ 
         transform: `translate(${layout.x}px, ${layout.y}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
         transformOrigin: 'center center'
       }}
-      onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'drag'); }}
-      onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'drag'); }}
     >
-      <div className={`relative group transition-all duration-200 ${isSelected && !isPlaying ? 'ring-2 ring-purple-500/80 bg-black/30 rounded-lg p-4' : 'p-2'}`}>
+      {/* Draggable Container Trigger */}
+      <div 
+         className={`relative group transition-all duration-200 ${isSelected && !isPlaying ? 'ring-2 ring-purple-500/80 bg-black/30 rounded-lg p-4 cursor-move' : 'p-2'}`}
+         onMouseDown={(e) => handleStart(e, 'drag')}
+         onTouchStart={(e) => handleStart(e, 'drag')}
+      >
         
-        {/* TEXT CONTENT */}
-        <div className={`${theme.text} drop-shadow-xl ${smartSize} text-center ${getAlignmentClass(align)} pointer-events-none`}>
-           {text.split(' ').map((word, i) => (
-             <span key={i} className={`inline-block ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation}`} style={{ animationDelay: isPlaying ? `${i * 0.25}s` : '0s' }}>{word}&nbsp;</span>
-           ))}
+        {/* TEXT CONTENT - WORD BY WORD RENDERING */}
+        <div className={`${theme.text} drop-shadow-xl ${smartSize} text-center ${getAlignmentClass(align)}`}>
+           {words.map((word, i) => {
+             const wl = getWordLayout(i);
+             const isWordMoved = wl.x !== 0 || wl.y !== 0;
+             
+             return (
+               <span 
+                 key={i} 
+                 className={`inline-block relative ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation} ${isSelected && !isPlaying ? 'cursor-grab hover:text-purple-300 transition-colors' : ''}`} 
+                 style={{ 
+                    animationDelay: isPlaying ? `${i * 0.25}s` : '0s',
+                    transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
+                    display: 'inline-block' 
+                 }}
+                 onMouseDown={(e) => isSelected && !isPlaying && handleStart(e, 'word-drag', i)}
+                 onTouchStart={(e) => isSelected && !isPlaying && handleStart(e, 'word-drag', i)}
+               >
+                 {word}&nbsp;
+                 {/* Visual hint for moved words */}
+                 {!isPlaying && isSelected && isWordMoved && (
+                    <span className="absolute -top-2 -right-2 w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                 )}
+               </span>
+             );
+           })}
         </div>
 
         {/* CONTROLS (Only visible when selected & not playing) */}
         {isSelected && !isPlaying && (
           <>
             <div 
-              onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'rotate'); }}
-              onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'rotate'); }}
+              onMouseDown={(e) => handleStart(e, 'rotate')}
+              onTouchStart={(e) => handleStart(e, 'rotate')}
               className="absolute -top-8 left-1/2 -translate-x-1/2 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform z-30"
             >
               <RotateCw size={14} strokeWidth={3} />
             </div>
 
             <div 
-              onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'scale'); }}
-              onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'scale'); }}
+              onMouseDown={(e) => handleStart(e, 'scale')}
+              onTouchStart={(e) => handleStart(e, 'scale')}
               className="absolute -bottom-4 -right-4 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform z-30"
             >
                <Maximize size={14} strokeWidth={3} />
+            </div>
+            
+            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] text-white/50 bg-black/50 px-2 rounded whitespace-nowrap pointer-events-none">
+                Drag specific words to scatter
             </div>
           </>
         )}
@@ -279,7 +320,6 @@ const TemplatePreviewModal = ({ template, onClose, onUse }) => {
                     </div>
                   </div>
              </div>
-             {/* Simple CSS animation for preview modal (Modal doesn't need complex engine) */}
              <div className="absolute bottom-0 left-0 w-full h-1 bg-white/20">
                 <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${((idx + 1) / template.frames.length) * 100}%` }}></div>
              </div>
@@ -322,17 +362,14 @@ export default function App() {
   const getTotalDuration = () => frames.reduce((total, frame) => total + (frame.duration * 1000), 0);
 
   const animate = (time) => {
-    // Calculate how much time has passed since play started
     const elapsed = Date.now() - startTimeRef.current;
     const totalDuration = getTotalDuration();
 
-    // 1. Update Progress Bar Directly (Super Smooth)
     const progressPercent = Math.min((elapsed / totalDuration) * 100, 100);
     if (progressBarRef.current) {
         progressBarRef.current.style.width = `${progressPercent}%`;
     }
 
-    // 2. Determine Which Frame Should Be Active
     let accumulatedTime = 0;
     let foundIndex = -1;
 
@@ -345,20 +382,17 @@ export default function App() {
         accumulatedTime += frameDuration;
     }
 
-    // 3. Handle End of Video
     if (elapsed >= totalDuration) {
         handleStop();
-        setCurrentFrameIndex(frames.length - 1); // Stay on last frame
+        setCurrentFrameIndex(frames.length - 1); 
         if (progressBarRef.current) progressBarRef.current.style.width = `100%`;
         return; 
     }
 
-    // 4. Update State only if Frame Changed (Performance Optimization)
     if (foundIndex !== -1 && foundIndex !== currentFrameIndex) {
         setCurrentFrameIndex(foundIndex);
     }
 
-    // Loop
     requestRef.current = requestAnimationFrame(animate);
   };
 
@@ -366,28 +400,23 @@ export default function App() {
     if (frames.length === 0) return;
     setIsPlaying(true);
     setSelectedElementId(null);
-    
-    // Start from beginning or calculate resume (simplifying to start from 0 for smoothness)
     setCurrentFrameIndex(0); 
     startTimeRef.current = Date.now();
-    
     if (mode === 'simple' && window.innerWidth < 1024 && previewRef.current) {
       previewRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    
     requestRef.current = requestAnimationFrame(animate);
   };
 
   const handleStop = () => {
     setIsPlaying(false);
     cancelAnimationFrame(requestRef.current);
-    // Reset bar width visually but keep current frame
     if (progressBarRef.current) progressBarRef.current.style.width = `0%`; 
   };
   
   const togglePlay = () => isPlaying ? handleStop() : handlePlay();
 
-  // --- EXISTING HANDLERS ---
+  // --- CRUD & LAYOUT HANDLERS ---
   const handleAddFrame = () => {
     const newId = Date.now();
     const lastFrame = frames[frames.length - 1];
@@ -396,7 +425,8 @@ export default function App() {
       theme: lastFrame ? lastFrame.theme : THEMES[0],
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
-      aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 }
+      aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 },
+      wordLayouts: {} // Init word layouts
     }]);
     setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
   };
@@ -404,9 +434,31 @@ export default function App() {
   const handleUpdateFrame = (id, field, value) => {
     setFrames(frames.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
+  
   const handleUpdateLayout = (id, newLayoutProps) => {
       setFrames(frames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
   };
+
+  // --- NEW: HANDLE INDIVIDUAL WORD LAYOUT UPDATES ---
+  const handleUpdateWordLayout = (frameId, wordIndex, newLayoutProps) => {
+      setFrames(frames.map(f => {
+          if (f.id !== frameId) return f;
+          const currentWordLayout = f.wordLayouts[wordIndex] || { x: 0, y: 0, rotation: 0 };
+          return {
+             ...f,
+             wordLayouts: {
+                 ...f.wordLayouts,
+                 [wordIndex]: { ...currentWordLayout, ...newLayoutProps }
+             }
+          };
+      }));
+  };
+
+  const handleResetWordLayouts = (frameId) => {
+     setFrames(frames.map(f => f.id === frameId ? { ...f, wordLayouts: {} } : f));
+     showToast("Word positions reset");
+  };
+
   const handleRemoveFrame = (id) => {
     if (frames.length <= 1) return;
     setFrames(frames.filter(f => f.id !== id));
@@ -430,7 +482,7 @@ export default function App() {
     setFrames(newFrames);
   };
   const handleApplyTemplate = (template) => {
-    const newFrames = template.frames.map(f => ({...f, id: Date.now() + Math.random()}));
+    const newFrames = template.frames.map(f => ({...f, id: Date.now() + Math.random(), wordLayouts: {}}));
     setFrames(newFrames);
     setMode('simple'); 
     setPreviewTemplate(null);
@@ -656,9 +708,11 @@ export default function App() {
                         animation={activeAnim}
                         align={activeFrame.align}
                         layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
+                        wordLayouts={activeFrame.wordLayouts}
                         isSelected={selectedElementId === activeFrame.id}
                         onSelect={() => setSelectedElementId(activeFrame.id)}
                         onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
+                        onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
                         isPlaying={isPlaying}
                       />
                     ) : (
@@ -678,13 +732,13 @@ export default function App() {
         </main>
       )}
 
-      {/* 2. CUSTOM STUDIO MODE (FIXED) */}
+      {/* 2. CUSTOM STUDIO MODE */}
       {mode === 'custom' && (
         <div className="flex-1 flex flex-col h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-           
+            
            {/* Top Section: Preview Area */}
            <div className="flex-1 bg-[#121212] relative flex flex-col items-center justify-center p-4 min-h-0">
-             
+              
               <div className="absolute top-4 z-40 bg-black/50 backdrop-blur-md p-1 rounded-full border border-white/10 flex gap-2">
                   <button onClick={togglePlay} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
                      {isPlaying ? <Pause size={12}/> : <Play size={12}/>} {isPlaying ? 'Stop' : 'Play'}
@@ -709,9 +763,11 @@ export default function App() {
                         animation={activeAnim}
                         align={activeFrame.align}
                         layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
+                        wordLayouts={activeFrame.wordLayouts}
                         isSelected={selectedElementId === activeFrame.id}
                         onSelect={() => setSelectedElementId(activeFrame.id)}
                         onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
+                        onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
                         isPlaying={isPlaying}
                       />
                  </div>
@@ -726,7 +782,7 @@ export default function App() {
              
              {!isPlaying && (
                 <div className="mt-4 bg-black/80 backdrop-blur px-4 py-2 rounded-full text-xs text-gray-400 border border-white/10 flex items-center gap-2">
-                   <Move size={12}/> Drag to Move <Maximize size={12} className="ml-2"/> Corner to Scale <RotateCw size={12} className="ml-2"/> Top to Rotate
+                   <Move size={12}/> Drag Block <Maximize size={12} className="ml-2"/> Corner to Scale <Move size={12} className="ml-2 text-purple-400"/> <b>Click & Drag Words</b> to Scatter
                 </div>
              )}
            </div>
@@ -796,26 +852,21 @@ export default function App() {
                                 </div>
                              </div>
                              <div className="flex gap-4">
-                               <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 border border-white/5">Reset Position</button>
-                               <button 
-                                 onClick={() => handleUpdateFrame(activeFrame.id, 'aiVoice', !activeFrame.aiVoice)}
-                                 className={`flex-1 py-2 rounded-lg border flex items-center justify-center gap-2 text-xs font-semibold transition-all ${activeFrame.aiVoice ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
-                               >
-                                  <Mic size={12} /> {activeFrame.aiVoice ? 'Voiceover Active' : 'Add Voiceover'}
-                               </button>
+                               <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 border border-white/5">Reset Block</button>
+                               <button onClick={() => handleResetWordLayouts(activeFrame.id)} className="flex-1 py-2 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-xs text-purple-400 border border-purple-500/30 flex items-center justify-center gap-1"><RotateCcw size={12}/> Reset Words</button>
                              </div>
                           </div>
                       )}
 
                       {activeTab === 'anim' && (
-                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                             {ANIMATIONS.map(a => (
                               <button key={a.id} onClick={() => handleUpdateFrame(activeFrame.id, 'animation', a.id)} className={`p-4 rounded-xl border text-sm flex flex-col items-center justify-center gap-2 transition-all ${activeFrame.animation === a.id ? 'bg-purple-600/20 border-purple-500 text-purple-300' : 'bg-neutral-900 border-white/10 text-gray-400 hover:bg-neutral-800'}`}>
                                 <Zap size={18} className={activeFrame.animation === a.id ? 'text-purple-400' : 'text-gray-600'} /> 
                                 <span className="text-xs font-medium text-center">{a.label}</span>
                               </button>
                             ))}
-                         </div>
+                          </div>
                       )}
 
                       {activeTab === 'image' && (
