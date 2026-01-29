@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Play, Pause, Plus, Trash2, Video, Smartphone, Monitor, Square, 
   Type, Layers, Image as ImageIcon, Clock, ArrowUp, ArrowDown, 
@@ -104,7 +104,7 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT (Redesigned for Strict Modes) ---
+// --- TRANSFORMABLE TEXT COMPONENT (FIXED DRAG LOGIC) ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {}, 
   isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying,
@@ -113,6 +113,12 @@ const TransformableText = ({
   const boxRef = useRef(null);
   const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0, type: null, wordIndex: null });
   const isDragging = useRef(false);
+  
+  // Ref pattern to access latest props inside event listeners without triggering re-renders
+  const latestProps = useRef({ layout, wordLayouts, onUpdateLayout, onUpdateWordLayout });
+  useEffect(() => {
+    latestProps.current = { layout, wordLayouts, onUpdateLayout, onUpdateWordLayout };
+  });
 
   const getWordLayout = (index) => {
     return wordLayouts[index] || { x: 0, y: 0, rotation: 0 };
@@ -121,12 +127,13 @@ const TransformableText = ({
   const handleStart = (e, type, wordIndex = null) => {
     if (isPlaying) return;
     
-    // STRICT MODE CHECK
-    if (editMode === 'block' && type === 'word-drag') return; // Cannot drag words in block mode
-    if (editMode === 'words' && type === 'drag') return;      // Cannot drag container in word mode
+    // Strict Mode Checks
+    if (editMode === 'block' && type === 'word-drag') return; 
+    if (editMode === 'words' && type === 'drag') return; 
     
     e.stopPropagation(); 
-    onSelect();
+    // Only call select if not already selected to avoid flicker
+    if (!isSelected) onSelect();
     
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -154,25 +161,27 @@ const TransformableText = ({
       if (!isDragging.current) return;
       const dx = clientX - dragStart.current.x;
       const dy = clientY - dragStart.current.y;
+      
+      const props = latestProps.current; // Access latest props via ref
 
       if (dragStart.current.type === 'word-drag') {
          const idx = dragStart.current.wordIndex;
-         onUpdateWordLayout(idx, {
+         props.onUpdateWordLayout(idx, {
             x: dragStart.current.startX + dx,
             y: dragStart.current.startY + dy
          });
       } else if (dragStart.current.type === 'drag') {
-        onUpdateLayout({ x: dragStart.current.startX + dx, y: dragStart.current.startY + dy });
+         props.onUpdateLayout({ x: dragStart.current.startX + dx, y: dragStart.current.startY + dy });
       } else if (dragStart.current.type === 'rotate') {
-        if (!boxRef.current) return;
-        const rect = boxRef.current.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
-        onUpdateLayout({ rotation: angle + 90 }); 
+         if (!boxRef.current) return;
+         const rect = boxRef.current.getBoundingClientRect();
+         const centerX = rect.left + rect.width / 2;
+         const centerY = rect.top + rect.height / 2;
+         const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
+         props.onUpdateLayout({ rotation: angle + 90 }); 
       } else if (dragStart.current.type === 'scale') {
          const newScale = Math.max(0.2, dragStart.current.startScale + (dy * 0.01));
-         onUpdateLayout({ scale: newScale });
+         props.onUpdateLayout({ scale: newScale });
       }
     };
 
@@ -197,7 +206,7 @@ const TransformableText = ({
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', handleEnd);
     };
-  }, [isSelected, layout, onUpdateLayout, onUpdateWordLayout]);
+  }, [isSelected]); // Removed volatile dependencies to prevent listener teardown
 
   const smartSize = getSmartFontSize(text.length);
   const words = text.split(' ');
@@ -230,13 +239,13 @@ const TransformableText = ({
                  key={i} 
                  className={`
                    inline-block relative ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation} 
-                   ${isSelected && !isPlaying && editMode === 'words' ? 'cursor-grab bg-purple-500/20 ring-1 ring-purple-400 rounded px-1 mx-1' : 'mx-1'}
+                   ${isSelected && !isPlaying && editMode === 'words' ? 'cursor-grab bg-purple-500/20 ring-1 ring-purple-400 rounded px-1 mx-1 z-30' : 'mx-1'}
                  `} 
                  style={{ 
                    animationDelay: isPlaying ? `${i * 0.25}s` : '0s',
                    transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
                    display: 'inline-block',
-                   padding: isSelected && editMode === 'words' ? '4px 8px' : '0' // Larger hit area on mobile
+                   padding: isSelected && editMode === 'words' ? '4px 8px' : '0'
                  }}
                  onMouseDown={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
                  onTouchStart={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
@@ -427,7 +436,7 @@ export default function App() {
   
   const togglePlay = () => isPlaying ? handleStop() : handlePlay();
 
-  // --- CRUD & LAYOUT HANDLERS ---
+  // --- CRUD & LAYOUT HANDLERS (STABILIZED WITH USECALLBACK) ---
   const handleAddFrame = () => {
     const newId = Date.now();
     const lastFrame = frames[frames.length - 1];
@@ -446,12 +455,13 @@ export default function App() {
     setFrames(frames.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
   
-  const handleUpdateLayout = (id, newLayoutProps) => {
-      setFrames(frames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
-  };
+  // Wrapped in useCallback to prevent child re-renders breaking drag events
+  const handleUpdateLayout = useCallback((id, newLayoutProps) => {
+      setFrames(prevFrames => prevFrames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
+  }, []);
 
-  const handleUpdateWordLayout = (frameId, wordIndex, newLayoutProps) => {
-      setFrames(frames.map(f => {
+  const handleUpdateWordLayout = useCallback((frameId, wordIndex, newLayoutProps) => {
+      setFrames(prevFrames => prevFrames.map(f => {
           if (f.id !== frameId) return f;
           const currentWordLayout = f.wordLayouts[wordIndex] || { x: 0, y: 0, rotation: 0 };
           return {
@@ -462,7 +472,7 @@ export default function App() {
              }
           };
       }));
-  };
+  }, []);
 
   const handleResetWordLayouts = (frameId) => {
      setFrames(frames.map(f => f.id === frameId ? { ...f, wordLayouts: {} } : f));
@@ -746,7 +756,7 @@ export default function App() {
       {/* 2. CUSTOM STUDIO MODE */}
       {mode === 'custom' && (
         <div className="flex-1 flex flex-col h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-            
+           
            {/* Top Section: Preview Area */}
            <div className="flex-1 bg-[#121212] relative flex flex-col items-center justify-center p-4 min-h-0">
               
