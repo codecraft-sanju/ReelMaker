@@ -104,7 +104,7 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT (FIXED DRAG LOGIC) ---
+// --- TRANSFORMABLE TEXT COMPONENT (ROBUST SCATTER LOGIC) ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {}, 
   isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying,
@@ -114,7 +114,7 @@ const TransformableText = ({
   const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0, type: null, wordIndex: null });
   const isDragging = useRef(false);
   
-  // Ref pattern to access latest props inside event listeners without triggering re-renders
+  // Ref to access latest props in event handlers without stale closures
   const latestProps = useRef({ layout, wordLayouts, onUpdateLayout, onUpdateWordLayout });
   useEffect(() => {
     latestProps.current = { layout, wordLayouts, onUpdateLayout, onUpdateWordLayout };
@@ -127,12 +127,21 @@ const TransformableText = ({
   const handleStart = (e, type, wordIndex = null) => {
     if (isPlaying) return;
     
-    // Strict Mode Checks
+    // STOP PROPAGATION IS KEY HERE
+    // This prevents the parent 'block drag' from firing when we click a specific word
+    e.stopPropagation(); 
+
+    // Prevent default to stop scrolling on mobile while dragging
+    if(e.type === 'touchstart') {
+       // We only prevent default if we are actually starting a valid drag action
+       // otherwise we might block scrolling entirely
+    }
+
+    // Logic Gate: Disallow interactions based on editMode
     if (editMode === 'block' && type === 'word-drag') return; 
     if (editMode === 'words' && type === 'drag') return; 
     
-    e.stopPropagation(); 
-    // Only call select if not already selected to avoid flicker
+    // Select the component if it isn't already
     if (!isSelected) onSelect();
     
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -159,19 +168,38 @@ const TransformableText = ({
   useEffect(() => {
     const handleMove = (clientX, clientY) => {
       if (!isDragging.current) return;
-      const dx = clientX - dragStart.current.x;
-      const dy = clientY - dragStart.current.y;
       
-      const props = latestProps.current; // Access latest props via ref
+      const props = latestProps.current; 
+      const { layout } = props;
+
+      // Raw distance moved on screen
+      const screenDx = clientX - dragStart.current.x;
+      const screenDy = clientY - dragStart.current.y;
 
       if (dragStart.current.type === 'word-drag') {
+         // --- MATH FIX: PROJECT SCREEN DELTA TO LOCAL ROTATED SPACE ---
+         // When the container is rotated/scaled, moving the mouse 'right' on screen
+         // might effectively be 'down' or 'left' in the container's coordinate system.
+         
+         // 1. Invert the rotation (radians)
+         const rad = -layout.rotation * (Math.PI / 180);
+         const cos = Math.cos(rad);
+         const sin = Math.sin(rad);
+         
+         // 2. Rotate the delta vector and Scale it down
+         const localDx = (screenDx * cos - screenDy * sin) / Math.max(0.1, layout.scale);
+         const localDy = (screenDx * sin + screenDy * cos) / Math.max(0.1, layout.scale);
+
          const idx = dragStart.current.wordIndex;
          props.onUpdateWordLayout(idx, {
-            x: dragStart.current.startX + dx,
-            y: dragStart.current.startY + dy
+            x: dragStart.current.startX + localDx,
+            y: dragStart.current.startY + localDy
          });
+
       } else if (dragStart.current.type === 'drag') {
-         props.onUpdateLayout({ x: dragStart.current.startX + dx, y: dragStart.current.startY + dy });
+         // Moving the whole block works in parent (screen) coordinates
+         props.onUpdateLayout({ x: dragStart.current.startX + screenDx, y: dragStart.current.startY + screenDy });
+
       } else if (dragStart.current.type === 'rotate') {
          if (!boxRef.current) return;
          const rect = boxRef.current.getBoundingClientRect();
@@ -180,7 +208,8 @@ const TransformableText = ({
          const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
          props.onUpdateLayout({ rotation: angle + 90 }); 
       } else if (dragStart.current.type === 'scale') {
-         const newScale = Math.max(0.2, dragStart.current.startScale + (dy * 0.01));
+         // Scale based on Y movement
+         const newScale = Math.max(0.2, dragStart.current.startScale + (screenDy * 0.01));
          props.onUpdateLayout({ scale: newScale });
       }
     };
@@ -190,8 +219,12 @@ const TransformableText = ({
       dragStart.current.type = null;
     };
 
+    // Attach to window to catch movements outside the box
     const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
-    const onTouchMove = (e) => handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    const onTouchMove = (e) => {
+        if(isDragging.current) e.preventDefault(); // Stop scrolling while dragging
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
 
     if (isSelected) {
       window.addEventListener('mousemove', onMouseMove);
@@ -206,7 +239,7 @@ const TransformableText = ({
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', handleEnd);
     };
-  }, [isSelected]); // Removed volatile dependencies to prevent listener teardown
+  }, [isSelected]); 
 
   const smartSize = getSmartFontSize(text.length);
   const words = text.split(' ');
@@ -239,16 +272,26 @@ const TransformableText = ({
                  key={i} 
                  className={`
                    inline-block relative ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation} 
-                   ${isSelected && !isPlaying && editMode === 'words' ? 'cursor-grab bg-purple-500/20 ring-1 ring-purple-400 rounded px-1 mx-1 z-30' : 'mx-1'}
+                   ${isSelected && !isPlaying && editMode === 'words' 
+                      ? 'cursor-grab bg-purple-500/30 ring-1 ring-purple-400 rounded px-1 mx-1 z-[100] pointer-events-auto hover:bg-purple-500/50' 
+                      : 'mx-1'}
                  `} 
                  style={{ 
-                   animationDelay: isPlaying ? `${i * 0.25}s` : '0s',
+                   // Apply scatter transform on top of everything
                    transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
                    display: 'inline-block',
                    padding: isSelected && editMode === 'words' ? '4px 8px' : '0'
                  }}
-                 onMouseDown={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
-                 onTouchStart={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
+                 onMouseDown={(e) => {
+                    if (isSelected && !isPlaying && editMode === 'words') {
+                        handleStart(e, 'word-drag', i);
+                    }
+                 }}
+                 onTouchStart={(e) => {
+                    if (isSelected && !isPlaying && editMode === 'words') {
+                        handleStart(e, 'word-drag', i);
+                    }
+                 }}
                >
                  {word}
                </span>
@@ -279,7 +322,7 @@ const TransformableText = ({
               </>
             )}
             
-            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-white/70 bg-black/60 px-3 py-1 rounded-full whitespace-nowrap pointer-events-none border border-white/10">
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-white/70 bg-black/60 px-3 py-1 rounded-full whitespace-nowrap pointer-events-none border border-white/10 z-50">
                 {editMode === 'block' ? 'Drag to Move Block' : 'Drag Individual Words'}
             </div>
           </>
@@ -759,39 +802,39 @@ export default function App() {
            
            {/* Top Section: Preview Area */}
            <div className="flex-1 bg-[#121212] relative flex flex-col items-center justify-center p-4 min-h-0">
-              
-              <div className="absolute top-4 z-40 bg-black/50 backdrop-blur-md p-1 rounded-full border border-white/10 flex gap-2">
-                  <button onClick={togglePlay} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
-                     {isPlaying ? <Pause size={12}/> : <Play size={12}/>} {isPlaying ? 'Stop' : 'Play'}
-                  </button>
-                  <div className="w-px h-6 bg-white/10 mx-1 self-center"></div>
-                   {Object.keys(ASPECT_RATIOS).map((ratio) => (
+             
+             <div className="absolute top-4 z-40 bg-black/50 backdrop-blur-md p-1 rounded-full border border-white/10 flex gap-2">
+                 <button onClick={togglePlay} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
+                    {isPlaying ? <Pause size={12}/> : <Play size={12}/>} {isPlaying ? 'Stop' : 'Play'}
+                 </button>
+                 <div className="w-px h-6 bg-white/10 mx-1 self-center"></div>
+                  {Object.keys(ASPECT_RATIOS).map((ratio) => (
                     <button key={ratio} onClick={() => !isPlaying && setSelectedRatio(ratio)} className={`p-2 rounded-full transition-all ${selectedRatio === ratio ? 'bg-white/20 text-white' : 'text-gray-500 hover:text-white'}`}>
                       {ASPECT_RATIOS[ratio].icon}
                     </button>
                   ))}
-              </div>
+             </div>
 
              <div className={`relative shadow-2xl transition-all duration-300 bg-black rounded-lg overflow-hidden border border-white/10 ${ASPECT_RATIOS[selectedRatio].containerClass} ring-1 ring-white/10 shrink-0`}>
                  <div className={`w-full h-full flex flex-col justify-center relative ${activeFrame.image ? 'bg-black' : activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
-                    
-                    {activeFrame.image && <><img src={activeFrame.image} className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-black/50" /></>}
-                    {!activeFrame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
-                    
-                    <TransformableText 
-                        text={activeFrame.text}
-                        theme={activeTheme}
-                        animation={activeAnim}
-                        align={activeFrame.align}
-                        layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
-                        wordLayouts={activeFrame.wordLayouts}
-                        isSelected={selectedElementId === activeFrame.id}
-                        onSelect={() => setSelectedElementId(activeFrame.id)}
-                        onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
-                        onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
-                        isPlaying={isPlaying}
-                        editMode={editMode}
-                      />
+                   
+                   {activeFrame.image && <><img src={activeFrame.image} className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-black/50" /></>}
+                   {!activeFrame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
+                   
+                   <TransformableText 
+                       text={activeFrame.text}
+                       theme={activeTheme}
+                       animation={activeAnim}
+                       align={activeFrame.align}
+                       layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
+                       wordLayouts={activeFrame.wordLayouts}
+                       isSelected={selectedElementId === activeFrame.id}
+                       onSelect={() => setSelectedElementId(activeFrame.id)}
+                       onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
+                       onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
+                       isPlaying={isPlaying}
+                       editMode={editMode}
+                     />
                  </div>
                  
                  {/* SMOOTH PROGRESS BAR (Ref based) */}
