@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Play, Pause, Plus, Trash2, Video, Smartphone, Monitor, Square, 
-  Type, Layers, Image as ImageIcon, Clock, ArrowUp, ArrowDown, 
-  Music, Crown, Check, X, Zap, LayoutTemplate, 
-  ChevronLeft, Copy, AlignLeft, AlignCenter, AlignRight, Share2, Mic,
-  Library, Sparkles, Eye, Move, RotateCw, Maximize, RotateCcw,
-  MousePointer2, Grid
+  Play, Pause, Plus, Trash2, Video, Monitor, 
+  Check, X, Zap, Share2, Music, Crown, 
+  ArrowUp, ArrowDown, ImageIcon, Clock, Edit3, 
+  Move, Maximize, RotateCw, Palette, Layout, Type, Grid,
+  MousePointer2, RefreshCcw, Smartphone
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -29,46 +28,20 @@ const ANIMATIONS = [
   { id: 'animate-fade', label: 'Slow Fade' }
 ];
 
-const ASPECT_RATIOS = {
-  '9:16': { label: 'Reel (9:16)', icon: <Smartphone size={14} />, containerClass: 'aspect-[9/16] h-[85vh] max-h-[700px] w-auto' },
-  '16:9': { label: 'YouTube (16:9)', icon: <Monitor size={14} />, containerClass: 'aspect-video w-full max-w-[800px]' },
-  '1:1': { label: 'Post (1:1)', icon: <Square size={14} />, containerClass: 'aspect-square h-[60vh] max-h-[600px] w-auto' }
-};
-
-// --- PRE-BUILT TEMPLATES ---
-const PRO_TEMPLATES = [
-  {
-    id: 't1',
-    name: 'Viral Motivation',
-    description: 'Dark theme with heavy stomp animation. Perfect for aggressive quotes.',
-    previewColor: 'bg-slate-900',
-    frames: [
-      { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
-      { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
-      { id: 103, text: "BUILD IT YOURSELF.", image: "", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1.5, rotation: 0 }, wordLayouts: {} }
-    ]
-  },
-  {
-    id: 't2',
-    name: 'Clean Storytime',
-    description: 'Minimalist white theme with smooth slides. Great for educational content.',
-    previewColor: 'bg-white',
-    frames: [
-      { id: 201, text: "Here is a secret...", image: "", duration: 2, theme: THEMES[4], animation: ANIMATIONS[1].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
-      { id: 202, text: "Most people fail because they quit too early.", image: "", duration: 3.5, theme: THEMES[4], animation: ANIMATIONS[5].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
-      { id: 203, text: "Don't be most people.", image: "", duration: 2.5, theme: THEMES[4], animation: ANIMATIONS[1].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} }
-    ]
-  }
+// --- DEFAULT DATA ---
+const INITIAL_FRAMES = [
+  { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
+  { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
+  { id: 103, text: "BUILD IT YOURSELF.", image: "", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1.5, rotation: 0 }, wordLayouts: {} }
 ];
-
-const INITIAL_FRAMES = PRO_TEMPLATES[0].frames;
 
 // --- 2. HELPER FUNCTIONS ---
 
 const getSmartFontSize = (textLength) => {
-  if (textLength < 20) return 'text-5xl lg:text-7xl leading-tight font-black'; 
-  if (textLength < 60) return 'text-3xl lg:text-5xl leading-snug font-bold';  
-  if (textLength < 120) return 'text-xl lg:text-3xl leading-normal font-bold'; 
+  if (textLength < 10) return 'text-6xl lg:text-8xl leading-tight font-black'; 
+  if (textLength < 30) return 'text-4xl lg:text-6xl leading-snug font-bold';  
+  if (textLength < 60) return 'text-2xl lg:text-4xl leading-normal font-bold'; 
+  if (textLength < 100) return 'text-xl lg:text-3xl leading-relaxed font-bold'; 
   return 'text-lg lg:text-2xl leading-relaxed font-medium'; 
 };
 
@@ -104,356 +77,364 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- COMPLETELY REWRITTEN TRANSFORMABLE TEXT COMPONENT ---
+// --- TRANSFORMABLE TEXT COMPONENT (Universal Preview) ---
+// FIX APPLIED: Separated Position wrapper from Animation wrapper
 const TransformableText = ({ 
-  text, theme, animation, align, layout, wordLayouts = {}, 
-  isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying,
-  editMode
+  text, theme, animation, align, layout, wordLayouts = {},
+  isPlaying
 }) => {
-  const containerRef = useRef(null);
-  const [dragging, setDragging] = useState({ active: false, type: null, wordIndex: null });
-  const dragDataRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0, initialRotation: 0, initialScale: 1 });
-
-  const getWordLayout = (index) => {
-    return wordLayouts[index] || { x: 0, y: 0, rotation: 0 };
-  };
-
-  // Handle pointer down - start dragging
-  const handlePointerDown = useCallback((e, type, wordIndex = null) => {
-    if (isPlaying) return;
-    
-    e.stopPropagation();
-    e.preventDefault();
-
-    // First click selects, second click drags
-    if (!isSelected) {
-      onSelect();
-      return;
-    }
-
-    // Check edit mode
-    if (editMode === 'block' && type === 'word-drag') return;
-    if (editMode === 'words' && type === 'drag') return;
-
-    const clientX = e.clientX || (e.touches?.[0]?.clientX);
-    const clientY = e.clientY || (e.touches?.[0]?.clientY);
-
-    if (!clientX || !clientY) return;
-
-    if (type === 'word-drag' && wordIndex !== null) {
-      const wl = getWordLayout(wordIndex);
-      dragDataRef.current = {
-        startX: clientX,
-        startY: clientY,
-        initialX: wl.x,
-        initialY: wl.y
-      };
-      setDragging({ active: true, type: 'word-drag', wordIndex });
-    } else if (type === 'drag') {
-      dragDataRef.current = {
-        startX: clientX,
-        startY: clientY,
-        initialX: layout.x,
-        initialY: layout.y
-      };
-      setDragging({ active: true, type: 'drag', wordIndex: null });
-    } else if (type === 'rotate') {
-      dragDataRef.current = {
-        startX: clientX,
-        startY: clientY,
-        initialRotation: layout.rotation
-      };
-      setDragging({ active: true, type: 'rotate', wordIndex: null });
-    } else if (type === 'scale') {
-      dragDataRef.current = {
-        startY: clientY,
-        initialScale: layout.scale
-      };
-      setDragging({ active: true, type: 'scale', wordIndex: null });
-    }
-  }, [isPlaying, isSelected, editMode, layout, wordLayouts, onSelect]);
-
-  // Handle pointer move
-  const handlePointerMove = useCallback((e) => {
-    if (!dragging.active) return;
-
-    e.preventDefault();
-
-    const clientX = e.clientX || (e.touches?.[0]?.clientX);
-    const clientY = e.clientY || (e.touches?.[0]?.clientY);
-
-    if (!clientX || !clientY) return;
-
-    const { startX, startY, initialX, initialY, initialRotation, initialScale } = dragDataRef.current;
-
-    if (dragging.type === 'word-drag' && dragging.wordIndex !== null) {
-      // Calculate screen delta
-      const screenDx = clientX - startX;
-      const screenDy = clientY - startY;
-
-      // Transform to local coordinate system accounting for rotation and scale
-      const rad = -layout.rotation * (Math.PI / 180);
-      const cos = Math.cos(rad);
-      const sin = Math.sin(rad);
-      const scale = Math.max(0.1, layout.scale);
-
-      const localDx = (screenDx * cos - screenDy * sin) / scale;
-      const localDy = (screenDx * sin + screenDy * cos) / scale;
-
-      onUpdateWordLayout(dragging.wordIndex, {
-        x: initialX + localDx,
-        y: initialY + localDy
-      });
-
-    } else if (dragging.type === 'drag') {
-      const dx = clientX - startX;
-      const dy = clientY - startY;
-      onUpdateLayout({ x: initialX + dx, y: initialY + dy });
-
-    } else if (dragging.type === 'rotate') {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
-      onUpdateLayout({ rotation: angle + 90 });
-
-    } else if (dragging.type === 'scale') {
-      const dy = clientY - startY;
-      const newScale = Math.max(0.3, Math.min(3, initialScale - (dy * 0.005)));
-      onUpdateLayout({ scale: newScale });
-    }
-  }, [dragging, layout, onUpdateLayout, onUpdateWordLayout]);
-
-  // Handle pointer up
-  const handlePointerUp = useCallback(() => {
-    setDragging({ active: false, type: null, wordIndex: null });
-  }, []);
-
-  // Setup global event listeners
-  useEffect(() => {
-    if (!dragging.active) return;
-
-    const handleMove = (e) => handlePointerMove(e);
-    const handleUp = () => handlePointerUp();
-
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('touchmove', handleMove, { passive: false });
-    window.addEventListener('mouseup', handleUp);
-    window.addEventListener('touchend', handleUp);
-    window.addEventListener('touchcancel', handleUp);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('touchmove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      window.removeEventListener('touchend', handleUp);
-      window.removeEventListener('touchcancel', handleUp);
-    };
-  }, [dragging.active, handlePointerMove, handlePointerUp]);
-
   const smartSize = getSmartFontSize(text.length);
   const words = text.split(' ').filter(w => w.trim());
 
   return (
-    <div 
-      ref={containerRef}
-      className={`absolute inset-0 z-20 flex items-center justify-center px-8 ${dragging.active ? 'cursor-grabbing' : ''}`}
-      style={{ 
-        transform: `translate(${layout.x}px, ${layout.y}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
-        transformOrigin: 'center center',
-        touchAction: 'none'
-      }}
-      onClick={(e) => {
-        if (!isSelected && !isPlaying) {
-          e.stopPropagation();
-          onSelect();
-        }
-      }}
-    >
-      {/* Main Container */}
+    <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none overflow-hidden">
       <div 
-        className={`relative transition-all duration-200 ${
-          isSelected && !isPlaying && editMode === 'block' 
-            ? 'ring-2 ring-purple-500/80 bg-black/20 rounded-xl p-6 cursor-move' 
-            : editMode === 'words' && !isPlaying && isSelected
-            ? 'p-4 bg-black/5 rounded-xl border-2 border-dashed border-purple-400/40'
-            : 'p-2'
-        }`}
-        onMouseDown={(e) => {
-          if (editMode === 'block' && isSelected && !isPlaying) {
-            handlePointerDown(e, 'drag');
-          }
-        }}
-        onTouchStart={(e) => {
-          if (editMode === 'block' && isSelected && !isPlaying) {
-            handlePointerDown(e, 'drag');
-          }
+        className={`relative p-2 w-full max-w-[90%]`}
+        style={{ 
+            transform: `translate(${layout.x}px, ${layout.y}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
+            transformOrigin: 'center center',
         }}
       >
-        
-        {/* TEXT CONTENT */}
-        <div className={`${theme.text} drop-shadow-2xl ${smartSize} ${getAlignmentClass(align)} select-none pointer-events-none`}>
-          <div className="flex flex-wrap gap-x-2 gap-y-1 justify-center items-center">
+        <div className={`${theme.text} drop-shadow-2xl ${smartSize} ${getAlignmentClass(align)} select-none`}>
+          <div className={`flex flex-wrap gap-x-3 gap-y-1 w-full ${align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center'}`}>
             {words.map((word, i) => {
-              const wl = getWordLayout(i);
-              const isWordDraggable = isSelected && !isPlaying && editMode === 'words';
-              
-              return (
-                <span 
-                  key={i}
-                  className={`
-                    inline-block relative whitespace-nowrap
-                    ${isPlaying ? 'word-hidden' : ''} 
-                    ${i % 2 !== 0 ? theme.accent : ''} 
-                    ${animation}
-                    ${isWordDraggable 
-                      ? 'pointer-events-auto cursor-grab active:cursor-grabbing bg-purple-500/30 ring-2 ring-purple-400/70 rounded-lg px-3 py-1.5 hover:bg-purple-500/40 hover:scale-110 transition-all shadow-xl shadow-purple-900/30 backdrop-blur-sm' 
-                      : ''
-                    }
-                  `}
-                  style={{ 
-                    transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
-                    transformOrigin: 'center center',
-                    animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
-                    zIndex: dragging.wordIndex === i ? 1000 : 1
-                  }}
-                  onMouseDown={(e) => {
-                    if (isWordDraggable) {
-                      handlePointerDown(e, 'word-drag', i);
-                    }
-                  }}
-                  onTouchStart={(e) => {
-                    if (isWordDraggable) {
-                      handlePointerDown(e, 'word-drag', i);
-                    }
-                  }}
-                >
-                  {word}
-                </span>
-              );
+                const wl = wordLayouts[i] || { x: 0, y: 0 };
+                return (
+                    // OUTER SPAN: Handles Position (Translate)
+                    <span 
+                      key={i}
+                      className="inline-block relative break-words"
+                      style={{ 
+                        transform: `translate(${wl.x}px, ${wl.y}px)`,
+                        display: 'inline-block' // Ensure transform works
+                      }}
+                    >
+                      {/* INNER SPAN: Handles Animation & Color */}
+                      <span className={`
+                        inline-block
+                        ${isPlaying ? 'word-hidden' : ''} 
+                        ${i % 2 !== 0 ? theme.accent : ''} 
+                        ${isPlaying ? animation : ''}
+                      `}
+                      style={{
+                        animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
+                        animationFillMode: 'forwards'
+                      }}>
+                        {word}
+                      </span>
+                    </span>
+                );
             })}
           </div>
         </div>
-
-        {/* CONTROL HANDLES - Block Mode */}
-        {isSelected && !isPlaying && editMode === 'block' && (
-          <>
-            {/* Rotate Handle */}
-            <div 
-              onMouseDown={(e) => handlePointerDown(e, 'rotate')}
-              onTouchStart={(e) => handlePointerDown(e, 'rotate')}
-              className="absolute -top-12 left-1/2 -translate-x-1/2 w-12 h-12 bg-white text-black rounded-full flex items-center justify-center cursor-pointer shadow-2xl hover:bg-gray-100 active:scale-95 transition-transform z-50 border-4 border-purple-500"
-            >
-              <RotateCw size={18} strokeWidth={2.5} />
-            </div>
-
-            {/* Scale Handle */}
-            <div 
-              onMouseDown={(e) => handlePointerDown(e, 'scale')}
-              onTouchStart={(e) => handlePointerDown(e, 'scale')}
-              className="absolute -bottom-6 -right-6 w-12 h-12 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-pointer shadow-2xl hover:bg-purple-500 active:scale-95 transition-transform z-50 border-4 border-white"
-            >
-              <Maximize size={18} strokeWidth={2.5} />
-            </div>
-
-            {/* Instruction Label */}
-            <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 text-xs text-white bg-black/90 px-4 py-2 rounded-full whitespace-nowrap pointer-events-none border-2 border-white/30 shadow-2xl font-semibold">
-              ↔️ Drag Block • 🔄 Top • 🔍 Corner
-            </div>
-          </>
-        )}
-
-        {/* WORD MODE INSTRUCTION */}
-        {isSelected && !isPlaying && editMode === 'words' && (
-          <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 text-xs text-purple-200 bg-purple-900/90 px-5 py-2 rounded-full whitespace-nowrap pointer-events-none border-2 border-purple-400/70 shadow-2xl font-bold animate-pulse">
-            ✨ Click & Drag Any Word ✨
-          </div>
-        )}
       </div>
     </div>
   );
 };
 
-// --- 4. PREVIEW MODAL COMPONENT ---
+// --- SCENE EDITOR COMPONENT (Enhanced for Mobile & Preview) ---
+const SceneEditor = ({ frame, onUpdate, onClose }) => {
+  const [activeTool, setActiveTool] = useState('move'); 
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggingWordIndex, setDraggingWordIndex] = useState(null);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  
+  // NEW: Local Preview State
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  
+  const containerRef = useRef(null);
+  
+  // --- POINTER EVENTS (Works for both Mouse and Touch) ---
+  const handlePointerDown = (e, type, index = null) => {
+    e.stopPropagation(); 
+    // If dragging from a word, we need to stop bubbling so we don't drag group
+    
+    if (type === 'word' && activeTool === 'word') {
+       setDraggingWordIndex(index);
+       const currentWordLayout = frame.wordLayouts[index] || { x: 0, y: 0 };
+       setDragStart({
+         x: e.clientX - currentWordLayout.x,
+         y: e.clientY - currentWordLayout.y
+       });
+       setIsDragging(true);
+       e.target.setPointerCapture(e.pointerId); // Key for touch dragging stability
+    } 
+    else if (type === 'group' && activeTool === 'move') {
+       setDragStart({ 
+         x: e.clientX - frame.layout.x, 
+         y: e.clientY - frame.layout.y 
+       });
+       setIsDragging(true);
+       e.target.setPointerCapture(e.pointerId);
+    }
+  };
 
-const TemplatePreviewModal = ({ template, onClose, onUse }) => {
-  const [idx, setIdx] = useState(0);
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
 
-  useEffect(() => {
-    if (!template) return;
-    const duration = template.frames[idx].duration * 1000;
-    const timer = setTimeout(() => {
-      setIdx((prev) => (prev + 1) % template.frames.length); 
-    }, duration);
-    return () => clearTimeout(timer);
-  }, [idx, template]);
+    if (activeTool === 'word' && draggingWordIndex !== null) {
+        let newX = e.clientX - dragStart.x;
+        let newY = e.clientY - dragStart.y;
+        const newWordLayouts = { ...frame.wordLayouts, [draggingWordIndex]: { x: newX, y: newY } };
+        onUpdate(frame.id, 'wordLayouts', newWordLayouts);
+    } else if (activeTool === 'move') {
+        let newX = e.clientX - dragStart.x;
+        let newY = e.clientY - dragStart.y;
+        const LIMIT = 450; 
+        newX = Math.max(-LIMIT, Math.min(newX, LIMIT));
+        newY = Math.max(-LIMIT, Math.min(newY, LIMIT));
+        onUpdate(frame.id, 'layout', { ...frame.layout, x: newX, y: newY });
+    }
+  };
 
-  if (!template) return null;
+  const handlePointerUp = (e) => {
+    setIsDragging(false);
+    setDraggingWordIndex(null);
+    if (e.target) e.target.releasePointerCapture(e.pointerId);
+  };
 
-  const frame = template.frames[idx];
-  const smartSize = getSmartFontSize(frame.text.length);
+  const resetWordPositions = () => {
+    onUpdate(frame.id, 'wordLayouts', {});
+  };
+
+  const togglePreview = () => {
+      if (isPreviewPlaying) {
+          setIsPreviewPlaying(false);
+      } else {
+          setIsPreviewPlaying(true);
+          // Auto stop after duration + buffer
+          setTimeout(() => setIsPreviewPlaying(false), (frame.duration * 1000) + 1000);
+      }
+  };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose}></div>
+    <div className="fixed inset-0 z-[200] bg-[#0a0a0a] flex flex-col md:flex-row overflow-hidden animate-fade">
       
-      <div className="relative w-full max-w-sm bg-neutral-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/20">
-          <div>
-            <h3 className="font-bold text-white">{template.name}</h3>
-            <p className="text-xs text-gray-400">Previewing..</p>
-          </div>
-          <button onClick={onClose} className="p-2 bg-white/10 rounded-full hover:bg-white/20"><X size={16} /></button>
+      {/* LEFT SIDEBAR: CONTROLS */}
+      {/* Changed height logic for mobile to allow canvas to be visible */}
+      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-white/10 bg-neutral-900/50 flex flex-col h-[45vh] md:h-full overflow-hidden order-2 md:order-1">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+           <h3 className="font-bold flex items-center gap-2"><Edit3 size={16} className="text-purple-500"/> Scene Editor</h3>
+           <div className="flex items-center gap-2">
+               {/* NEW: PREVIEW BUTTON IN HEADER FOR EASY ACCESS */}
+               <button 
+                onClick={togglePreview}
+                className={`p-1.5 px-3 rounded-full text-xs font-bold flex items-center gap-1 transition-all ${isPreviewPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}
+               >
+                   {isPreviewPlaying ? <Pause size={12} fill="currentColor"/> : <Play size={12} fill="currentColor"/>} 
+                   {isPreviewPlaying ? 'Stop' : 'Play'}
+               </button>
+               <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><X size={16}/></button>
+           </div>
         </div>
+        
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 pb-20">
+           
+           <div className="space-y-2">
+             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Type size={12}/> Text Content</label>
+             <textarea 
+               value={frame.text} 
+               onChange={(e) => onUpdate(frame.id, 'text', e.target.value)}
+               className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none"
+               rows={3}
+             />
+           </div>
 
-        <div className="flex-1 relative aspect-[9/16] w-full bg-black overflow-hidden">
-             <div className={`w-full h-full flex flex-col justify-center p-6 relative transition-colors duration-300 ${frame.theme.bg} ${getAlignmentClass(frame.align)}`}>
-                  {frame.image && <><img src={frame.image} className="absolute inset-0 w-full h-full object-cover z-0" alt="bg"/><div className="absolute inset-0 bg-black/60 z-0"></div></>}
-                  {!frame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
-
-                  <div 
-                    className={`relative z-10 w-full break-words px-2 flex flex-wrap gap-x-2 gap-y-1 justify-center`}
-                    style={{ transform: `scale(${frame.layout?.scale || 1}) rotate(${frame.layout?.rotation || 0}deg)`}}
-                  >
-                    <div className={`${frame.theme.text} drop-shadow-xl ${smartSize} text-center`}>
-                      {frame.text.split(' ').map((word, i) => (
-                        <span key={i} className={`inline-block word-hidden ${i % 2 !== 0 ? frame.theme.accent : ''} ${frame.animation}`} style={{ animationDelay: `${i * 0.25}s` }}>{word}&nbsp;</span>
-                      ))}
-                    </div>
+           <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-3 space-y-3">
+              <label className="text-xs text-purple-300 font-bold uppercase flex items-center gap-2"><Move size={12}/> Movement Mode</label>
+              <div className="flex gap-2">
+                 <button 
+                   onClick={() => setActiveTool('move')}
+                   className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border text-xs gap-1 transition-all ${activeTool === 'move' ? 'bg-purple-600 text-white border-purple-500' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}
+                 >
+                    <Move size={16}/> Move Group
+                 </button>
+                 <button 
+                   onClick={() => setActiveTool('word')}
+                   className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border text-xs gap-1 transition-all ${activeTool === 'word' ? 'bg-purple-600 text-white border-purple-500' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}
+                 >
+                    <MousePointer2 size={16}/> Move Words
+                 </button>
+              </div>
+              {activeTool === 'word' && (
+                  <div className="text-[10px] text-gray-400 text-center leading-tight">
+                    Drag words on screen.
+                    <button onClick={resetWordPositions} className="mt-2 w-full py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 flex items-center justify-center gap-2">
+                        <RefreshCcw size={10}/> Reset Words
+                    </button>
                   </div>
+              )}
+           </div>
+
+           <div className="space-y-2">
+             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Palette size={12}/> Theme</label>
+             <div className="grid grid-cols-4 gap-2">
+               {THEMES.map(t => (
+                 <button 
+                   key={t.id}
+                   onClick={() => onUpdate(frame.id, 'theme', t)}
+                   className={`h-8 rounded-md border transition-all ${t.bg} ${frame.theme.id === t.id ? 'ring-2 ring-white scale-110 z-10' : 'border-white/10 opacity-60 hover:opacity-100'}`}
+                 />
+               ))}
              </div>
-             <div className="absolute bottom-0 left-0 w-full h-1 bg-white/20">
-                <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${((idx + 1) / template.frames.length) * 100}%` }}></div>
-             </div>
+           </div>
+
+           <div className="space-y-2">
+             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Zap size={12}/> Animation Style</label>
+             <select 
+                value={frame.animation} 
+                onChange={(e) => onUpdate(frame.id, 'animation', e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-gray-300 outline-none"
+             >
+               {ANIMATIONS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+             </select>
+           </div>
+
+            <div className="space-y-4 pt-4 border-t border-white/5">
+              <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Layout size={12}/> Transform & Align</label>
+              
+              <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
+                {['left', 'center', 'right'].map(align => (
+                    <button 
+                        key={align}
+                        onClick={() => onUpdate(frame.id, 'align', align)}
+                        className={`flex-1 py-1 text-xs rounded capitalize ${frame.align === align ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        {align}
+                    </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                 <Maximize size={14} className="text-gray-500"/>
+                 <input 
+                   type="range" min="0.5" max="2.5" step="0.1" 
+                   value={frame.layout.scale}
+                   onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, scale: parseFloat(e.target.value)})}
+                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"
+                 />
+                 <span className="text-xs font-mono w-8 text-right">{frame.layout.scale}x</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                 <RotateCw size={14} className="text-gray-500"/>
+                 <input 
+                   type="range" min="-45" max="45" step="5" 
+                   value={frame.layout.rotation}
+                   onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, rotation: parseInt(e.target.value)})}
+                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"
+                 />
+                 <span className="text-xs font-mono w-8 text-right">{frame.layout.rotation}°</span>
+              </div>
+            </div>
+        </div>
+      </div>
+
+      {/* CENTER: CANVAS */}
+      <div 
+        className="flex-1 bg-neutral-950 flex flex-col relative order-1 md:order-2 h-[55vh] md:h-full" 
+        onPointerMove={handlePointerMove} 
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      >
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 z-50 pointer-events-none">
+           <span className="text-xs text-gray-400 flex items-center gap-2">
+             {activeTool === 'move' ? <><Move size={12}/> Drag text group</> : <><MousePointer2 size={12}/> Drag words</>}
+           </span>
         </div>
 
-        <div className="p-4 bg-neutral-900 border-t border-white/10 grid grid-cols-2 gap-3">
-           <button onClick={onClose} className="py-3 rounded-xl border border-white/10 text-gray-300 font-semibold text-sm hover:bg-white/5">Close</button>
-           <button onClick={() => onUse(template)} className="py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-900/20">Use Template</button>
+        <div className="flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden">
+          <div ref={containerRef} className="aspect-video w-full max-w-[1000px] border border-white/10 bg-black relative shadow-2xl overflow-hidden group touch-none">
+              
+              {/* Background */}
+              <div className={`absolute inset-0 transition-colors duration-300 ${frame.image ? 'bg-black' : frame.theme.bg}`}>
+                  {frame.image && <><img src={frame.image} alt="Background" className="absolute inset-0 w-full h-full object-cover z-0" /><div className="absolute inset-0 bg-black/60 z-0"></div></>}
+                  {!frame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
+              </div>
+
+              {/* Safe Zone Grid */}
+              <div className="absolute inset-0 z-0 pointer-events-none opacity-20">
+                 <div className="w-full h-full grid grid-cols-3 grid-rows-3">
+                    <div className="border-r border-b border-white/10"></div><div className="border-r border-b border-white/10"></div><div className="border-b border-white/10"></div>
+                    <div className="border-r border-b border-white/10"></div><div className="border-r border-b border-white/10"></div><div className="border-b border-white/10"></div>
+                    <div className="border-r border-white/10"></div><div className="border-r border-white/10"></div><div></div>
+                 </div>
+              </div>
+
+              {/* Interactive Layer with Preview Logic (FIXED FOR DRAGGING + ANIMATION) */}
+              <div className="absolute inset-0 z-30 flex items-center justify-center">
+                <div 
+                   onPointerDown={(e) => handlePointerDown(e, 'group')}
+                   style={{ 
+                       transform: `translate(${frame.layout.x}px, ${frame.layout.y}px) rotate(${frame.layout.rotation}deg) scale(${frame.layout.scale})`,
+                       transformOrigin: 'center center',
+                   }}
+                   className={`
+                       relative p-2 transition-colors w-full max-w-[90%]
+                       ${activeTool === 'move' && !isPreviewPlaying ? 'cursor-move border-2 border-purple-500 bg-purple-500/10 rounded-lg' : 'border-2 border-dashed border-transparent'}
+                   `}
+                >
+                  <div className={`${frame.theme.text} drop-shadow-xl ${getSmartFontSize(frame.text.length)} ${getAlignmentClass(frame.align)} select-none`}>
+                      <div className={`flex flex-wrap gap-x-3 gap-y-1 ${frame.align === 'left' ? 'justify-start' : frame.align === 'right' ? 'justify-end' : 'justify-center'}`}>
+                        
+                        {frame.text.split(' ').filter(w => w.trim()).map((word, i) => {
+                            const wl = frame.wordLayouts[i] || { x: 0, y: 0 };
+                            return (
+                                // OUTER SPAN: Handles Position & Drag Events
+                                <span 
+                                    key={i} 
+                                    onPointerDown={(e) => handlePointerDown(e, 'word', i)}
+                                    className={`
+                                        inline-block relative 
+                                        ${activeTool === 'word' && !isPreviewPlaying ? 'cursor-grab hover:scale-110 active:cursor-grabbing' : ''}
+                                    `}
+                                    style={{ 
+                                        transform: `translate(${wl.x}px, ${wl.y}px)`,
+                                        touchAction: 'none'
+                                    }}
+                                >
+                                    {/* INNER SPAN: Handles Animation & Styling */}
+                                    <span className={`
+                                        inline-block
+                                        ${i % 2 !== 0 ? frame.theme.accent : ''}
+                                        ${activeTool === 'word' && !isPreviewPlaying ? 'hover:text-purple-400' : ''}
+                                        ${isPreviewPlaying ? 'word-hidden' : ''} 
+                                        ${isPreviewPlaying ? frame.animation : ''}
+                                    `}
+                                    style={{
+                                        animationDelay: isPreviewPlaying ? `${i * 0.15}s` : '0s',
+                                        animationFillMode: 'forwards'
+                                    }}>
+                                        {word}
+                                    </span>
+                                </span>
+                            );
+                        })}
+                      </div>
+                  </div>
+                </div>
+              </div>
+
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-// --- 5. MAIN APP ---
+// --- 4. MAIN APP ---
 
 export default function App() {
   const [frames, setFrames] = useState(INITIAL_FRAMES);
-  const [mode, setMode] = useState('simple'); 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0); 
-  const [selectedRatio, setSelectedRatio] = useState('9:16');
+  const [editingFrameId, setEditingFrameId] = useState(null); 
   const [isMusicEnabled, setIsMusicEnabled] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
-  const [activeTab, setActiveTab] = useState('theme'); 
   const [isPricingOpen, setIsPricingOpen] = useState(false);
-  const [previewTemplate, setPreviewTemplate] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '' });
-  const [selectedElementId, setSelectedElementId] = useState(null); 
-  const [editMode, setEditMode] = useState('block');
 
   const requestRef = useRef();
   const startTimeRef = useRef(0);
@@ -502,10 +483,9 @@ export default function App() {
   const handlePlay = () => {
     if (frames.length === 0) return;
     setIsPlaying(true);
-    setSelectedElementId(null);
     setCurrentFrameIndex(0); 
     startTimeRef.current = Date.now();
-    if (mode === 'simple' && window.innerWidth < 1024 && previewRef.current) {
+    if (window.innerWidth < 1024 && previewRef.current) {
       previewRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     requestRef.current = requestAnimationFrame(animate);
@@ -519,7 +499,7 @@ export default function App() {
   
   const togglePlay = () => isPlaying ? handleStop() : handlePlay();
 
-  // --- CRUD & LAYOUT HANDLERS ---
+  // --- CRUD HANDLERS ---
   const handleAddFrame = () => {
     const newId = Date.now();
     const lastFrame = frames[frames.length - 1];
@@ -528,7 +508,7 @@ export default function App() {
       theme: lastFrame ? lastFrame.theme : THEMES[0],
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
-      aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 },
+      layout: { x: 0, y: 0, scale: 1, rotation: 0 },
       wordLayouts: {}
     }]);
     setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
@@ -537,44 +517,11 @@ export default function App() {
   const handleUpdateFrame = (id, field, value) => {
     setFrames(frames.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
-  
-  const handleUpdateLayout = useCallback((id, newLayoutProps) => {
-      setFrames(prevFrames => prevFrames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
-  }, []);
-
-  const handleUpdateWordLayout = useCallback((frameId, wordIndex, newLayoutProps) => {
-      setFrames(prevFrames => prevFrames.map(f => {
-          if (f.id !== frameId) return f;
-          const currentWordLayout = f.wordLayouts[wordIndex] || { x: 0, y: 0, rotation: 0 };
-          return {
-             ...f,
-             wordLayouts: {
-                 ...f.wordLayouts,
-                 [wordIndex]: { ...currentWordLayout, ...newLayoutProps }
-             }
-          };
-      }));
-  }, []);
-
-  const handleResetWordLayouts = (frameId) => {
-     setFrames(frames.map(f => f.id === frameId ? { ...f, wordLayouts: {} } : f));
-     showToast("✨ All words reset to center!");
-  };
 
   const handleRemoveFrame = (id) => {
     if (frames.length <= 1) return;
     setFrames(frames.filter(f => f.id !== id));
     if (currentFrameIndex >= frames.length - 1) setCurrentFrameIndex(Math.max(0, frames.length - 2));
-  };
-
-  const handleDuplicateFrame = (id) => {
-    const frameToCopy = frames.find(f => f.id === id);
-    if (!frameToCopy) return;
-    const newFrame = { ...frameToCopy, id: Date.now(), wordLayouts: { ...frameToCopy.wordLayouts } };
-    const index = frames.findIndex(f => f.id === id);
-    const newFrames = [...frames];
-    newFrames.splice(index + 1, 0, newFrame);
-    setFrames(newFrames);
   };
 
   const handleMoveFrame = (index, direction) => {
@@ -584,14 +531,6 @@ export default function App() {
     newFrames[index] = newFrames[index + direction];
     newFrames[index + direction] = temp;
     setFrames(newFrames);
-  };
-
-  const handleApplyTemplate = (template) => {
-    const newFrames = template.frames.map(f => ({...f, id: Date.now() + Math.random(), wordLayouts: {}}));
-    setFrames(newFrames);
-    setMode('simple'); 
-    setPreviewTemplate(null);
-    showToast(`✨ ${template.name} Template Applied!`);
   };
 
   const handleExport = () => {
@@ -619,22 +558,34 @@ export default function App() {
   const activeFrame = frames[currentFrameIndex] || frames[0];
   const activeTheme = activeFrame?.theme || THEMES[0];
   const activeAnim = activeFrame?.animation || ANIMATIONS[0].id;
+  const editingFrame = frames.find(f => f.id === editingFrameId);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-purple-500 selection:text-white flex flex-col relative" onClick={() => setSelectedElementId(null)}>
+    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-purple-500 selection:text-white flex flex-col relative">
       
+      {/* --- RENDER EDITOR IF ACTIVE --- */}
+      {editingFrame && (
+        <SceneEditor 
+          frame={editingFrame} 
+          onUpdate={handleUpdateFrame} 
+          onClose={() => setEditingFrameId(null)} 
+        />
+      )}
+
       <style>{`
         @keyframes stomp { 0% { transform: scale(3); opacity: 0; } 50% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
         @keyframes slide-up { 0% { transform: translateY(40px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
         @keyframes pop-in { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
         @keyframes rotate-in { 0% { transform: rotate(-180deg) scale(0); opacity: 0; } 100% { transform: rotate(0) scale(1); opacity: 1; } }
         @keyframes blur-in { 0% { filter: blur(20px); opacity: 0; transform: scale(1.2); } 100% { filter: blur(0); opacity: 1; transform: scale(1); } }
-        
+        @keyframes fade-in { 0% { opacity: 0; } 100% { opacity: 1; } }
+
         .animate-stomp { animation: stomp 0.5s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
         .animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-pop-in { animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
         .animate-rotate-in { animation: rotate-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
         .animate-blur-in { animation: blur-in 0.7s ease-out forwards; }
+        .animate-fade { animation: fade-in 0.3s ease-out forwards; }
         
         .word-hidden { opacity: 0; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -642,14 +593,7 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
       `}</style>
 
-      {previewTemplate && (
-        <TemplatePreviewModal 
-          template={previewTemplate} 
-          onClose={() => setPreviewTemplate(null)} 
-          onUse={handleApplyTemplate} 
-        />
-      )}
-
+      {/* ... [EXPORT LOADER] ... */}
       {isExporting && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
            <div className="w-64 space-y-4 text-center">
@@ -666,6 +610,7 @@ export default function App() {
         </div>
       )}
 
+      {/* ... [PRICING MODAL] ... */}
       {isPricingOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsPricingOpen(false)}></div>
@@ -682,6 +627,7 @@ export default function App() {
         </div>
       )}
 
+      {/* ... [TOAST] ... */}
       <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ${toast.show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
         <div className="bg-white text-black px-6 py-3 rounded-full font-medium shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center gap-2">
            <Zap className="w-4 h-4 text-purple-600" /> {toast.message}
@@ -690,23 +636,14 @@ export default function App() {
 
       <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          {mode !== 'simple' ? (
-             <button onClick={() => { setMode('simple'); setIsPlaying(false); }} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                <ChevronLeft className="w-5 h-5" />
-             </button>
-          ) : (
             <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
               <Video className="w-4 h-4 text-white" />
             </div>
-          )}
-          <h1 className="text-lg font-bold tracking-wide">
-            {mode === 'simple' ? <span>Reel<span className="text-purple-500">Maker</span></span> : mode === 'custom' ? 'Custom Studio' : 'Templates'}
-          </h1>
+            <h1 className="text-lg font-bold tracking-wide">
+              Reel<span className="text-purple-500">Maker</span>
+            </h1>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
-            <button onClick={() => setMode('templates')} className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${mode === 'templates' ? 'bg-white text-black' : 'hover:bg-white/10 text-gray-300'}`}>
-                <Library className="w-3.5 h-3.5" /> Templates
-            </button>
             <button onClick={() => setIsPricingOpen(true)} className="bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg flex items-center gap-1.5">
                <Crown className="w-3.5 h-3.5 fill-white/20" /> Pro
             </button>
@@ -716,16 +653,15 @@ export default function App() {
         </div>
       </header>
 
-      {mode === 'simple' && (
-        <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 overflow-hidden lg:h-[calc(100vh-64px)] h-auto">
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 overflow-hidden lg:h-[calc(100vh-64px)] h-auto">
           
+          {/* --- LEFT COLUMN: TIMELINE & EDITING --- */}
           <div className="lg:col-span-5 flex flex-col h-[600px] lg:h-full gap-4 order-2 lg:order-1">
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-300">
-                <Layers className="w-4 h-4 text-purple-400" /> Script Timeline
+                <Video className="w-4 h-4 text-purple-400" /> Script Timeline
               </h2>
               <div className="flex items-center gap-2">
-                 <button onClick={() => setMode('templates')} className="md:hidden text-xs bg-white/5 px-2 py-1 rounded hover:bg-white/10">Templates</button>
                  <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">{frames.length} Scenes</span>
               </div>
             </div>
@@ -744,8 +680,8 @@ export default function App() {
                     </div>
                     <textarea value={frame.text} onChange={(e) => handleUpdateFrame(frame.id, 'text', e.target.value)} placeholder="Enter scene text..." rows={2} className="flex-1 bg-black/20 rounded-lg border border-white/5 p-2 text-sm text-white placeholder-gray-600 focus:border-purple-500/50 outline-none resize-none" disabled={isPlaying} />
                     <div className="flex flex-col gap-1">
+                        <button onClick={(e) => { e.stopPropagation(); setEditingFrameId(frame.id); setCurrentFrameIndex(index); }} className="p-2 text-white bg-purple-600 hover:bg-purple-500 rounded-lg transition-all shadow-lg shadow-purple-900/20" title="Edit Scene"><Edit3 className="w-4 h-4" /></button>
                         <button onClick={(e) => { e.stopPropagation(); handleRemoveFrame(frame.id); }} className="p-2 text-gray-600 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDuplicateFrame(frame.id); }} className="p-2 text-gray-600 hover:bg-blue-500/10 hover:text-blue-400 rounded-lg transition-all" title="Duplicate"><Copy className="w-4 h-4" /></button>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 pl-9">
@@ -773,52 +709,32 @@ export default function App() {
               <button onClick={() => setIsMusicEnabled(!isMusicEnabled)} className={`h-12 w-12 flex items-center justify-center rounded-xl transition-colors border ${isMusicEnabled ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-white/5 text-gray-400 border-white/5 hover:text-white'}`}>
                 <Music className="w-5 h-5" />
               </button>
-              <button onClick={() => { handleStop(); setMode('custom'); setCurrentFrameIndex(0); }} className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-900/30 transition-all border border-white/10 transform active:scale-95">
-                 <LayoutTemplate className="w-4 h-4" /> Customize Reel
-              </button>
             </div>
           </div>
 
-          <div ref={previewRef} className="lg:col-span-7 h-auto min-h-[500px] lg:h-full flex flex-col bg-neutral-900/50 rounded-3xl border border-white/5 p-4 lg:p-8 relative order-1 lg:order-2 scroll-mt-20">
+          {/* --- RIGHT COLUMN: PREVIEW --- */}
+          <div ref={previewRef} className="lg:col-span-7 h-auto min-h-[500px] lg:h-full flex flex-col bg-neutral-900/50 rounded-3xl border border-white/5 p-4 lg:p-8 relative order-1 lg:order-2">
               <div className="flex justify-center mb-6">
-                <div className="bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/10 flex gap-1">
-                  {Object.keys(ASPECT_RATIOS).map((ratio) => (
-                    <button key={ratio} onClick={() => !isPlaying && setSelectedRatio(ratio)} disabled={isPlaying} className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all ${selectedRatio === ratio ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'} ${isPlaying ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      {ASPECT_RATIOS[ratio].icon} {ASPECT_RATIOS[ratio].label}
-                    </button>
-                  ))}
-                </div>
+                 <span className="text-gray-400 text-xs font-mono bg-white/5 px-3 py-1 rounded-full border border-white/5">Aspect Ratio: 16:9 (YouTube)</span>
               </div>
 
               <div className="flex-1 flex items-center justify-center overflow-hidden">
-                <div className={`relative transition-all duration-500 ease-in-out bg-black rounded-[2rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col ${ASPECT_RATIOS[selectedRatio].containerClass} ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
+                <div className={`relative transition-all duration-500 ease-in-out bg-black rounded-[1rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col aspect-video w-full max-w-[800px] ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
                   <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeFrame.image ? 'bg-black' : activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
                     
                     {activeFrame.image && <><img src={activeFrame.image} alt="Background" className="absolute inset-0 w-full h-full object-cover z-0" /><div className="absolute inset-0 bg-black/60 z-0"></div></>}
                     
                     {!activeFrame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
                     
-                    {currentFrameIndex >= 0 ? (
-                      <TransformableText 
-                        text={activeFrame.text}
-                        theme={activeTheme}
-                        animation={activeAnim}
-                        align={activeFrame.align}
-                        layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
-                        wordLayouts={activeFrame.wordLayouts}
-                        isSelected={selectedElementId === activeFrame.id}
-                        onSelect={() => setSelectedElementId(activeFrame.id)}
-                        onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
-                        onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
-                        isPlaying={isPlaying}
-                        editMode={editMode}
-                      />
-                    ) : (
-                      <div className="space-y-6 opacity-40 w-full text-center">
-                          <div className="w-24 h-24 rounded-full border-4 border-dashed border-gray-600 flex items-center justify-center mx-auto animate-pulse"><Type className="w-10 h-10 text-gray-500" /></div>
-                          <p className="text-gray-500 font-medium">Tap here or Play below</p>
-                      </div>
-                    )}
+                    <TransformableText 
+                      text={activeFrame.text}
+                      theme={activeTheme}
+                      animation={activeAnim}
+                      align={activeFrame.align}
+                      layout={activeFrame.layout}
+                      wordLayouts={activeFrame.wordLayouts}
+                      isPlaying={isPlaying}
+                    />
                   </div>
                   <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
                       <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
@@ -826,213 +742,7 @@ export default function App() {
                 </div>
               </div>
           </div>
-        </main>
-      )}
-
-      {mode === 'custom' && (
-        <div className="flex-1 flex flex-col h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-           
-           <div className="flex-1 bg-[#121212] relative flex flex-col items-center justify-center p-4 min-h-0">
-             
-             <div className="absolute top-4 z-40 bg-black/50 backdrop-blur-md p-1 rounded-full border border-white/10 flex gap-2">
-                 <button onClick={togglePlay} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
-                    {isPlaying ? <Pause size={12}/> : <Play size={12}/>} {isPlaying ? 'Stop' : 'Play'}
-                 </button>
-                 <div className="w-px h-6 bg-white/10 mx-1 self-center"></div>
-                  {Object.keys(ASPECT_RATIOS).map((ratio) => (
-                    <button key={ratio} onClick={() => !isPlaying && setSelectedRatio(ratio)} className={`p-2 rounded-full transition-all ${selectedRatio === ratio ? 'bg-white/20 text-white' : 'text-gray-500 hover:text-white'}`}>
-                      {ASPECT_RATIOS[ratio].icon}
-                    </button>
-                  ))}
-             </div>
-
-             <div className={`relative shadow-2xl transition-all duration-300 bg-black rounded-lg overflow-hidden border border-white/10 ${ASPECT_RATIOS[selectedRatio].containerClass} ring-1 ring-white/10 shrink-0`}>
-                 <div className={`w-full h-full flex flex-col justify-center relative ${activeFrame.image ? 'bg-black' : activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
-                   
-                   {activeFrame.image && <><img src={activeFrame.image} className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-black/50" /></>}
-                   {!activeFrame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
-                   
-                   <TransformableText 
-                       text={activeFrame.text}
-                       theme={activeTheme}
-                       animation={activeAnim}
-                       align={activeFrame.align}
-                       layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
-                       wordLayouts={activeFrame.wordLayouts}
-                       isSelected={selectedElementId === activeFrame.id}
-                       onSelect={() => setSelectedElementId(activeFrame.id)}
-                       onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
-                       onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
-                       isPlaying={isPlaying}
-                       editMode={editMode}
-                     />
-                 </div>
-                 
-                 <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
-                    <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
-                 </div>
-
-                 {!isPlaying && <div className="absolute inset-x-4 inset-y-12 border border-dashed border-white/10 rounded-lg pointer-events-none"></div>}
-             </div>
-             
-             {!isPlaying && (
-                <div className="mt-4 bg-black/80 backdrop-blur px-5 py-2 rounded-full text-xs text-gray-300 border border-white/20 flex items-center gap-3">
-                   <Move size={14} className="text-purple-400"/> <b>Block Mode:</b> Drag • Rotate • Scale
-                   <div className="w-px h-4 bg-white/20"></div>
-                   <Grid size={14} className="text-purple-400"/> <b>Words Mode:</b> Click & Drag Each Word
-                </div>
-             )}
-           </div>
-
-           <div className="h-[45vh] bg-[#0f0f0f] border-t border-white/10 flex flex-col z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-              <div className="h-20 border-b border-white/5 flex items-center px-4 gap-3 overflow-x-auto custom-scrollbar bg-[#050505] shrink-0">
-                 {frames.map((frame, idx) => (
-                   <button key={frame.id} onClick={() => { setIsPlaying(false); setCurrentFrameIndex(idx); }} className={`relative h-14 min-w-[90px] rounded-lg border-2 transition-all flex items-center justify-center overflow-hidden shrink-0 group ${currentFrameIndex === idx ? 'border-purple-500 ring-2 ring-purple-500/30' : 'border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'}`}>
-                     <div className={`absolute inset-0 opacity-50 ${frame.theme.bg}`}></div>
-                     {frame.image && <img src={frame.image} className="absolute inset-0 w-full h-full object-cover opacity-60" />}
-                     <span className="relative z-10 text-[10px] font-bold truncate max-w-[90%] px-1.5 py-0.5 bg-black/60 rounded backdrop-blur-sm text-white">{idx + 1}. {frame.text.substring(0,6)}..</span>
-                   </button>
-                 ))}
-                 <button onClick={handleAddFrame} className="h-12 w-12 rounded-full border border-dashed border-white/20 flex items-center justify-center text-gray-500 hover:text-white shrink-0 hover:bg-white/5 transition-all"><Plus size={20} /></button>
-              </div>
-
-              <div className="flex-1 flex flex-col p-2 lg:p-4 overflow-hidden">
-                 <div className="flex justify-center mb-4 shrink-0">
-                   <div className="flex bg-neutral-900 rounded-full p-1 border border-white/10 shadow-lg">
-                      {['theme', 'text', 'image', 'anim'].map(t => (
-                        <button key={t} onClick={() => setActiveTab(t)} className={`px-5 py-2 rounded-full text-xs font-bold transition-all capitalize ${activeTab === t ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}>
-                          {t === 'anim' ? 'Animation' : t}
-                        </button>
-                      ))}
-                   </div>
-                 </div>
-
-                 <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
-                    <div className="max-w-4xl mx-auto">
-                      {activeTab === 'theme' && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                            {THEMES.map(t => (
-                              <button key={t.id} onClick={() => handleUpdateFrame(activeFrame.id, 'theme', t)} className={`p-3 h-24 rounded-xl border text-left transition-all relative overflow-hidden group flex flex-col justify-end ${activeFrame.theme.id === t.id ? 'border-purple-500 ring-2 ring-purple-500/50 scale-105' : 'border-white/10 hover:border-white/30'}`}>
-                                <div className={`absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity ${t.bg}`}></div>
-                                <span className="relative z-10 text-xs font-bold shadow-black drop-shadow-md">{t.name}</span>
-                                {activeFrame.theme.id === t.id && <div className="absolute top-2 right-2 bg-purple-500 rounded-full p-0.5"><Check className="w-2.5 h-2.5 text-white" /></div>}
-                              </button>
-                            ))}
-                        </div>
-                      )}
-
-                      {activeTab === 'text' && (
-                          <div className="space-y-4 max-w-2xl mx-auto">
-                            <textarea 
-                               value={activeFrame.text} 
-                               onChange={(e) => handleUpdateFrame(activeFrame.id, 'text', e.target.value)}
-                               className="w-full bg-neutral-900 rounded-xl p-4 text-base border border-white/10 focus:border-purple-500 outline-none resize-none shadow-inner"
-                               rows={2}
-                               placeholder="Type your script here..."
-                             />
-                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-neutral-900 p-3 rounded-xl border border-white/10 flex items-center justify-center">
-                                   <div className="text-xs text-gray-400 text-center">Font Size: <span className="text-white font-bold ml-1">Auto Scale</span></div>
-                                </div>
-                                <div className="bg-neutral-900 p-3 rounded-xl border border-white/10">
-                                   <label className="text-[10px] text-gray-500 font-bold mb-2 block uppercase tracking-wider">Alignment</label>
-                                   <div className="flex gap-1">
-                                      {['left', 'center', 'right'].map(align => (
-                                          <button key={align} onClick={() => handleUpdateFrame(activeFrame.id, 'align', align)} className={`flex-1 py-1.5 rounded border flex items-center justify-center transition-colors ${activeFrame.align === align ? 'bg-purple-600 border-purple-500 text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}>
-                                              {align === 'left' && <AlignLeft size={14}/>}
-                                              {align === 'center' && <AlignCenter size={14}/>}
-                                              {align === 'right' && <AlignRight size={14}/>}
-                                          </button>
-                                      ))}
-                                   </div>
-                                </div>
-                             </div>
-                             
-                             <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 p-1 rounded-2xl border-2 border-purple-500/30 flex items-center relative shadow-lg">
-                                <button 
-                                  onClick={() => { setEditMode('block'); showToast("🎯 Block Mode Active"); }}
-                                  className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'block' ? 'bg-white text-black shadow-xl scale-105' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                  <MousePointer2 size={16}/> Whole Block
-                                </button>
-                                <button 
-                                  onClick={() => { setEditMode('words'); showToast("✨ Word Scatter Active!"); }}
-                                  className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'words' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xl scale-105' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                  <Grid size={16}/> Scatter Words
-                                </button>
-                             </div>
-
-                             <div className="flex gap-4">
-                               <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-gray-400 border border-white/5 font-medium">Reset Block</button>
-                               <button onClick={() => handleResetWordLayouts(activeFrame.id)} className="flex-1 py-2.5 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-sm text-purple-400 border border-purple-500/30 flex items-center justify-center gap-2 font-medium"><RotateCcw size={14}/> Reset Words</button>
-                             </div>
-                           </div>
-                      )}
-
-                      {activeTab === 'anim' && (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                            {ANIMATIONS.map(a => (
-                              <button key={a.id} onClick={() => handleUpdateFrame(activeFrame.id, 'animation', a.id)} className={`p-4 rounded-xl border text-sm flex flex-col items-center justify-center gap-2 transition-all ${activeFrame.animation === a.id ? 'bg-purple-600/20 border-purple-500 text-purple-300' : 'bg-neutral-900 border-white/10 text-gray-400 hover:bg-neutral-800'}`}>
-                                <Zap size={18} className={activeFrame.animation === a.id ? 'text-purple-400' : 'text-gray-600'} /> 
-                                <span className="text-xs font-medium text-center">{a.label}</span>
-                              </button>
-                            ))}
-                          </div>
-                      )}
-
-                      {activeTab === 'image' && (
-                        <div className="space-y-4 max-w-lg mx-auto">
-                            <div className="bg-neutral-900 p-4 rounded-xl border border-white/10">
-                               <label className="text-xs text-gray-500 font-bold mb-3 block uppercase">Background Image URL</label>
-                               <div className="flex gap-2">
-                                 <input type="text" value={activeFrame.image} onChange={(e) => handleUpdateFrame(activeFrame.id, 'image', e.target.value)} placeholder="https://..." className="flex-1 bg-black rounded px-3 py-2 text-sm border border-white/10 focus:border-purple-500 outline-none" />
-                                 {activeFrame.image && <button onClick={() => handleUpdateFrame(activeFrame.id, 'image', '')} className="p-2 bg-red-500/20 text-red-500 rounded hover:bg-red-500 hover:text-white transition-colors"><Trash2 size={16}/></button>}
-                               </div>
-                               <p className="text-[10px] text-gray-600 mt-2">Paste a direct link to an image (Unsplash, etc.)</p>
-                            </div>
-                        </div>
-                      )}
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {mode === 'templates' && (
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-           <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-10">
-                 <h2 className="text-3xl lg:text-4xl font-black mb-3">Reel Templates</h2>
-                 <p className="text-gray-400">Jumpstart your viral journey with our pro-designed sets.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-20">
-                 {PRO_TEMPLATES.map(template => (
-                   <div key={template.id} onClick={() => setPreviewTemplate(template)} className="bg-neutral-900 border border-white/10 rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all hover:scale-[1.02] cursor-pointer group shadow-xl">
-                      <div className={`h-40 ${template.previewColor} relative flex items-center justify-center`}>
-                         <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm gap-2">
-                            <span className="bg-white text-black px-4 py-2 rounded-full font-bold text-sm transform scale-90 group-hover:scale-100 transition-transform flex items-center gap-2">
-                               <Eye className="w-4 h-4"/> Preview
-                            </span>
-                         </div>
-                         <div className="text-4xl font-black text-white/20 uppercase tracking-widest">{template.name.split(' ')[0]}</div>
-                      </div>
-                      <div className="p-5">
-                         <h3 className="font-bold text-lg mb-1">{template.name}</h3>
-                         <p className="text-xs text-gray-400 mb-4 h-8 leading-relaxed line-clamp-2">{template.description}</p>
-                         <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
-                            <span className="bg-white/5 px-2 py-1 rounded">{template.frames.length} Scenes</span>
-                            <span className="bg-white/5 px-2 py-1 rounded text-purple-400 flex items-center gap-1"><Sparkles size={10}/> Pro Style</span>
-                         </div>
-                      </div>
-                   </div>
-                 ))}
-              </div>
-           </div>
-        </div>
-      )}
+      </main>
 
     </div>
   );
