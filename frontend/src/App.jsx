@@ -662,7 +662,7 @@ export default function App() {
                         theme={activeTheme}
                         animation={activeAnim}
                         align={activeFrame.align}
-                        layout={activeFrame.layout || { x:0, y:0, scale:1, rotation:0 }}
+                        layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
                         isSelected={selectedElementId === activeFrame.id}
                         onSelect={() => setSelectedElementId(activeFrame.id)}
                         onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
@@ -698,7 +698,7 @@ export default function App() {
                         theme={activeTheme}
                         animation={activeAnim}
                         align={activeFrame.align}
-                        layout={activeFrame.layout || { x:0, y:0, scale:1, rotation:0 }}
+                        layout={activeFrame.layout || { x: 0, y: 0, scale: 1, rotation: 0 }}
                         isSelected={selectedElementId === activeFrame.id}
                         onSelect={() => setSelectedElementId(activeFrame.id)}
                         onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
@@ -776,7 +776,7 @@ export default function App() {
                               </div>
                            </div>
                            
-                           <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x:0, y:0, scale:1, rotation:0 })} className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400">Reset Text Position</button>
+                           <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400">Reset Text Position</button>
 
                            <button 
                              onClick={() => handleUpdateFrame(activeFrame.id, 'aiVoice', !activeFrame.aiVoice)}
