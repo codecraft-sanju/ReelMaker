@@ -125,7 +125,7 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT (The Magic Logic) ---
+// --- TRANSFORMABLE TEXT COMPONENT (FIXED FOR TOUCH) ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, isSelected, onSelect, onUpdateLayout, isPlaying 
 }) => {
@@ -135,75 +135,77 @@ const TransformableText = ({
   const isRotating = useRef(false);
   const isScaling = useRef(false);
 
-  // --- MOUSE HANDLERS ---
-  const handleMouseDown = (e) => {
+  // --- HANDLERS ---
+  
+  const handleStart = (clientX, clientY, type) => {
     if (isPlaying) return;
-    e.stopPropagation();
     onSelect();
-    isDragging.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY, startX: layout.x, startY: layout.y };
-  };
-
-  const handleRotateStart = (e) => {
-    e.stopPropagation();
-    isRotating.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY, startRotation: layout.rotation };
-  };
-
-  const handleScaleStart = (e) => {
-    e.stopPropagation();
-    isScaling.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY, startScale: layout.scale };
+    
+    if (type === 'drag') {
+        isDragging.current = true;
+        dragStart.current = { x: clientX, y: clientY, startX: layout.x, startY: layout.y };
+    } else if (type === 'rotate') {
+        isRotating.current = true;
+        dragStart.current = { x: clientX, y: clientY, startRotation: layout.rotation };
+    } else if (type === 'scale') {
+        isScaling.current = true;
+        dragStart.current = { x: clientX, y: clientY, startScale: layout.scale };
+    }
   };
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
+    const handleMove = (clientX, clientY) => {
       if (!isDragging.current && !isRotating.current && !isScaling.current) return;
 
       if (isDragging.current) {
-        const dx = e.clientX - dragStart.current.x;
-        const dy = e.clientY - dragStart.current.y;
+        const dx = clientX - dragStart.current.x;
+        const dy = clientY - dragStart.current.y;
         onUpdateLayout({ x: dragStart.current.startX + dx, y: dragStart.current.startY + dy });
       }
 
       if (isRotating.current) {
-        // Calculate angle based on center of box
         if (!boxRef.current) return;
         const rect = boxRef.current.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
-        const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
-        // Offset by 90deg because handle is at top
+        const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
         onUpdateLayout({ rotation: angle + 90 }); 
       }
 
       if (isScaling.current) {
-         // Simple scale based on Y movement for ease
-         const dy = e.clientY - dragStart.current.y;
-         // Sensitivity factor
+         const dy = clientY - dragStart.current.y;
          const newScale = Math.max(0.2, dragStart.current.startScale + (dy * 0.01));
          onUpdateLayout({ scale: newScale });
       }
     };
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       isDragging.current = false;
       isRotating.current = false;
       isScaling.current = false;
     };
 
+    const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
+    const onTouchMove = (e) => {
+        // Prevent scrolling while dragging text
+        if (isDragging.current || isRotating.current || isScaling.current) {
+            // e.preventDefault(); // Optional: might block scrolling if needed
+        }
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
+
     if (isSelected) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      // Touch support
-      window.addEventListener('touchmove', (e) => handleMouseMove(e.touches[0]));
-      window.addEventListener('touchend', handleMouseUp);
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchmove', onTouchMove, { passive: false });
+      window.addEventListener('touchend', handleEnd);
     }
+
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', (e) => handleMouseMove(e.touches[0]));
-      window.removeEventListener('touchend', handleMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', handleEnd);
     };
   }, [isSelected, layout, onUpdateLayout]);
 
@@ -212,18 +214,18 @@ const TransformableText = ({
   return (
     <div 
       ref={boxRef}
-      className={`absolute z-20 cursor-move select-none flex items-center justify-center w-full px-8`}
+      className={`absolute z-20 cursor-move select-none flex items-center justify-center w-full px-8 touch-none`}
       style={{ 
         transform: `translate(${layout.x}px, ${layout.y}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
         transformOrigin: 'center center'
       }}
-      onMouseDown={handleMouseDown}
-      onTouchStart={(e) => handleMouseDown(e.touches[0])}
+      onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'drag'); }}
+      onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'drag'); }}
     >
       <div className={`relative group ${isSelected && !isPlaying ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-black/50 rounded-lg p-2 bg-black/20 backdrop-blur-sm' : ''}`}>
         
         {/* TEXT CONTENT */}
-        <div className={`${theme.text} drop-shadow-xl ${smartSize} text-center ${getAlignmentClass(align)}`}>
+        <div className={`${theme.text} drop-shadow-xl ${smartSize} text-center ${getAlignmentClass(align)} pointer-events-none`}>
            {text.split(' ').map((word, i) => (
              <span key={i} className={`inline-block ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation}`} style={{ animationDelay: isPlaying ? `${i * 0.25}s` : '0s' }}>{word}&nbsp;</span>
            ))}
@@ -234,27 +236,22 @@ const TransformableText = ({
           <>
             {/* Rotate Handle (Top) */}
             <div 
-              onMouseDown={handleRotateStart} 
-              onTouchStart={(e) => handleRotateStart(e.touches[0])}
-              className="absolute -top-12 left-1/2 -translate-x-1/2 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform"
+              onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'rotate'); }}
+              onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'rotate'); }}
+              className="absolute -top-12 left-1/2 -translate-x-1/2 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform z-30"
             >
-              <RotateCw size={14} strokeWidth={3} />
+              <RotateCw size={18} strokeWidth={3} />
               <div className="absolute top-full left-1/2 w-0.5 h-4 bg-purple-500 -translate-x-1/2"></div>
             </div>
 
             {/* Scale Handle (Bottom Right) */}
             <div 
-              onMouseDown={handleScaleStart}
-              onTouchStart={(e) => handleScaleStart(e.touches[0])}
-              className="absolute -bottom-4 -right-4 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform"
+              onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'scale'); }}
+              onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'scale'); }}
+              className="absolute -bottom-5 -right-5 w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform z-30"
             >
-               <Maximize size={14} strokeWidth={3} />
+               <Maximize size={18} strokeWidth={3} />
             </div>
-
-             {/* Move Hint */}
-             <div className="absolute -top-12 right-0 bg-black/60 text-white text-[10px] px-2 py-1 rounded backdrop-blur-sm flex gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-               Drag to Move
-             </div>
           </>
         )}
       </div>
