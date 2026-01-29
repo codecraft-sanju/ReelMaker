@@ -29,9 +29,9 @@ const ANIMATIONS = [
 ];
 
 const ASPECT_RATIOS = {
-  '9:16': { label: 'Reel (9:16)', icon: <Smartphone size={14} />, containerClass: 'aspect-[9/16] max-w-[340px]' },
-  '16:9': { label: 'YouTube (16:9)', icon: <Monitor size={14} />, containerClass: 'aspect-video max-w-[640px]' },
-  '1:1': { label: 'Post (1:1)', icon: <Square size={14} />, containerClass: 'aspect-square max-w-[450px]' }
+  '9:16': { label: 'Reel (9:16)', icon: <Smartphone size={14} />, containerClass: 'aspect-[9/16] h-[85vh] max-h-[700px] w-auto' },
+  '16:9': { label: 'YouTube (16:9)', icon: <Monitor size={14} />, containerClass: 'aspect-video w-full max-w-[800px]' },
+  '1:1': { label: 'Post (1:1)', icon: <Square size={14} />, containerClass: 'aspect-square h-[60vh] max-h-[600px] w-auto' }
 };
 
 // --- PRE-BUILT TEMPLATES ---
@@ -125,7 +125,7 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT (FIXED FOR TOUCH) ---
+// --- TRANSFORMABLE TEXT COMPONENT (OPTIMIZED) ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, isSelected, onSelect, onUpdateLayout, isPlaying 
 }) => {
@@ -187,9 +187,8 @@ const TransformableText = ({
 
     const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
     const onTouchMove = (e) => {
-        // Prevent scrolling while dragging text
         if (isDragging.current || isRotating.current || isScaling.current) {
-            // e.preventDefault(); // Optional: might block scrolling if needed
+            // e.preventDefault(); // Handled by style touch-action: none
         }
         handleMove(e.touches[0].clientX, e.touches[0].clientY);
     };
@@ -222,7 +221,7 @@ const TransformableText = ({
       onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'drag'); }}
       onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'drag'); }}
     >
-      <div className={`relative group ${isSelected && !isPlaying ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-black/50 rounded-lg p-2 bg-black/20 backdrop-blur-sm' : ''}`}>
+      <div className={`relative group transition-all duration-200 ${isSelected && !isPlaying ? 'ring-2 ring-purple-500/80 bg-black/30 rounded-lg p-4' : 'p-2'}`}>
         
         {/* TEXT CONTENT */}
         <div className={`${theme.text} drop-shadow-xl ${smartSize} text-center ${getAlignmentClass(align)} pointer-events-none`}>
@@ -238,19 +237,18 @@ const TransformableText = ({
             <div 
               onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'rotate'); }}
               onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'rotate'); }}
-              className="absolute -top-12 left-1/2 -translate-x-1/2 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform z-30"
+              className="absolute -top-8 left-1/2 -translate-x-1/2 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform z-30"
             >
-              <RotateCw size={18} strokeWidth={3} />
-              <div className="absolute top-full left-1/2 w-0.5 h-4 bg-purple-500 -translate-x-1/2"></div>
+              <RotateCw size={14} strokeWidth={3} />
             </div>
 
             {/* Scale Handle (Bottom Right) */}
             <div 
               onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'scale'); }}
               onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'scale'); }}
-              className="absolute -bottom-5 -right-5 w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform z-30"
+              className="absolute -bottom-4 -right-4 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform z-30"
             >
-               <Maximize size={18} strokeWidth={3} />
+               <Maximize size={14} strokeWidth={3} />
             </div>
           </>
         )}
@@ -374,7 +372,7 @@ export default function App() {
 
   // Specifically update layout object
   const handleUpdateLayout = (id, newLayoutProps) => {
-     setFrames(frames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
+      setFrames(frames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
   };
 
   const handleRemoveFrame = (id) => {
@@ -425,6 +423,7 @@ export default function App() {
   const handleStop = () => {
     setIsPlaying(false);
     clearTimeout(timerRef.current);
+    // Do not reset currentFrameIndex here so user can edit where they stopped
   };
   
   const togglePlay = () => isPlaying ? handleStop() : handlePlay();
@@ -464,27 +463,29 @@ export default function App() {
 
   useEffect(() => { return () => clearTimeout(timerRef.current); }, []);
 
+  // Ensure activeFrame is valid
   const activeFrame = frames[currentFrameIndex] || frames[0];
-  const activeTheme = activeFrame.theme;
-  const activeAnim = activeFrame.animation;
-  const smartFontSize = getSmartFontSize(activeFrame.text.length);
+  const activeTheme = activeFrame?.theme || THEMES[0];
+  const activeAnim = activeFrame?.animation || ANIMATIONS[0].id;
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-purple-500 selection:text-white flex flex-col relative" onClick={() => setSelectedElementId(null)}>
       
       <style>{`
-        @keyframes stomp { 0% { transform: scale(3); opacity: 0; } 40% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes slide-up { 0% { transform: translateY(50px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
-        @keyframes pop-in { 0% { transform: scale(0); opacity: 0; } 80% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes rotate-in { 0% { transform: rotate(-90deg) scale(0.5); opacity: 0; } 100% { transform: rotate(0) scale(1); opacity: 1; } }
-        @keyframes blur-in { 0% { filter: blur(20px); opacity: 0; transform: scale(1.5); } 100% { filter: blur(0); opacity: 1; transform: scale(1); } }
-        .animate-stomp { animation: stomp 0.4s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
-        .animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
-        .animate-pop-in { animation: pop-in 0.4s cubic-bezier(0.17, 0.67, 0.83, 0.67) forwards; }
-        .animate-rotate-in { animation: rotate-in 0.5s ease-out forwards; }
-        .animate-blur-in { animation: blur-in 0.5s ease-out forwards; }
+        @keyframes stomp { 0% { transform: scale(3); opacity: 0; } 50% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes slide-up { 0% { transform: translateY(40px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+        @keyframes pop-in { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes rotate-in { 0% { transform: rotate(-180deg) scale(0); opacity: 0; } 100% { transform: rotate(0) scale(1); opacity: 1; } }
+        @keyframes blur-in { 0% { filter: blur(20px); opacity: 0; transform: scale(1.2); } 100% { filter: blur(0); opacity: 1; transform: scale(1); } }
+        
+        .animate-stomp { animation: stomp 0.5s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
+        .animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-pop-in { animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        .animate-rotate-in { animation: rotate-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        .animate-blur-in { animation: blur-in 0.7s ease-out forwards; }
+        
         .word-hidden { opacity: 0; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #1a1a1a; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
       `}</style>
@@ -543,7 +544,7 @@ export default function App() {
       <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-3">
           {mode !== 'simple' ? (
-             <button onClick={() => setMode('simple')} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
+             <button onClick={() => { setMode('simple'); setIsPlaying(false); }} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
                 <ChevronLeft className="w-5 h-5" />
              </button>
           ) : (
@@ -589,17 +590,20 @@ export default function App() {
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar pb-24">
               {frames.map((frame, index) => (
-                <div key={frame.id} className={`flex flex-col gap-3 p-4 rounded-xl border transition-all duration-200 ${isPlaying && currentFrameIndex === index ? 'bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)]' : 'bg-neutral-900 border-white/10 hover:border-white/20'}`}>
+                <div key={frame.id} 
+                  onClick={() => setCurrentFrameIndex(index)}
+                  className={`flex flex-col gap-3 p-4 rounded-xl border transition-all duration-200 cursor-pointer ${currentFrameIndex === index ? 'bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)] ring-1 ring-purple-500/20' : 'bg-neutral-900 border-white/10 hover:border-white/20'}`}
+                >
                   <div className="flex items-start gap-3">
                     <div className="flex flex-col gap-1 items-center justify-center pt-1">
-                      <button onClick={() => handleMoveFrame(index, -1)} disabled={index === 0} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowUp className="w-3 h-3" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleMoveFrame(index, -1); }} disabled={index === 0} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowUp className="w-3 h-3" /></button>
                       <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-xs font-mono text-gray-500">{index + 1}</div>
-                      <button onClick={() => handleMoveFrame(index, 1)} disabled={index === frames.length - 1} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowDown className="w-3 h-3" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleMoveFrame(index, 1); }} disabled={index === frames.length - 1} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowDown className="w-3 h-3" /></button>
                     </div>
                     <textarea value={frame.text} onChange={(e) => handleUpdateFrame(frame.id, 'text', e.target.value)} placeholder="Enter scene text..." rows={2} className="flex-1 bg-black/20 rounded-lg border border-white/5 p-2 text-sm text-white placeholder-gray-600 focus:border-purple-500/50 outline-none resize-none" disabled={isPlaying} />
                     <div className="flex flex-col gap-1">
-                        <button onClick={() => handleRemoveFrame(frame.id)} className="p-2 text-gray-600 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                        <button onClick={() => handleDuplicateFrame(frame.id)} className="p-2 text-gray-600 hover:bg-blue-500/10 hover:text-blue-400 rounded-lg transition-all" title="Duplicate"><Copy className="w-4 h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); handleRemoveFrame(frame.id); }} className="p-2 text-gray-600 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDuplicateFrame(frame.id); }} className="p-2 text-gray-600 hover:bg-blue-500/10 hover:text-blue-400 rounded-lg transition-all" title="Duplicate"><Copy className="w-4 h-4" /></button>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 pl-9">
@@ -645,13 +649,13 @@ export default function App() {
               </div>
 
               <div className="flex-1 flex items-center justify-center overflow-hidden">
-                <div className={`relative w-full transition-all duration-500 ease-in-out bg-black rounded-[2rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col ${ASPECT_RATIOS[selectedRatio].containerClass} ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
+                <div className={`relative transition-all duration-500 ease-in-out bg-black rounded-[2rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col ${ASPECT_RATIOS[selectedRatio].containerClass} ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
                   {/* Smart Container with Flex Wrapping */}
-                  <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${currentFrameIndex >= 0 && !activeFrame.image ? activeTheme.bg : 'bg-black'} ${currentFrameIndex >= 0 ? getAlignmentClass(activeFrame.align) : ''}`}>
+                  <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeFrame.image ? 'bg-black' : activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
                     
-                    {currentFrameIndex >= 0 && activeFrame.image && <><img src={activeFrame.image} alt="Background" className="absolute inset-0 w-full h-full object-cover z-0" /><div className="absolute inset-0 bg-black/60 z-0"></div></>}
+                    {activeFrame.image && <><img src={activeFrame.image} alt="Background" className="absolute inset-0 w-full h-full object-cover z-0" /><div className="absolute inset-0 bg-black/60 z-0"></div></>}
                     
-                    {!frames[currentFrameIndex]?.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
+                    {!activeFrame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
                     
                     {currentFrameIndex >= 0 ? (
                       <TransformableText 
@@ -681,14 +685,31 @@ export default function App() {
         </main>
       )}
 
-      {/* 2. CUSTOM STUDIO MODE (Advanced) */}
+      {/* 2. CUSTOM STUDIO MODE (FIXED & IMPROVED) */}
       {mode === 'custom' && (
-        <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="flex-1 flex flex-col h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
            
-           <div className="flex-1 bg-[#121212] relative flex items-center justify-center p-4">
-              <div className={`relative shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-all duration-300 bg-black rounded-lg overflow-hidden border border-white/10 ${ASPECT_RATIOS[selectedRatio].containerClass} ring-1 ring-white/10`}>
-                 <div className={`w-full h-full flex flex-col justify-center relative ${activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
+           {/* Top Section: Preview Area */}
+           <div className="flex-1 bg-[#121212] relative flex flex-col items-center justify-center p-4 min-h-0">
+             
+              {/* Toolbar floating on top */}
+              <div className="absolute top-4 z-40 bg-black/50 backdrop-blur-md p-1 rounded-full border border-white/10 flex gap-2">
+                  <button onClick={togglePlay} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
+                     {isPlaying ? <Pause size={12}/> : <Play size={12}/>} {isPlaying ? 'Stop' : 'Play'}
+                  </button>
+                  <div className="w-px h-6 bg-white/10 mx-1 self-center"></div>
+                   {Object.keys(ASPECT_RATIOS).map((ratio) => (
+                    <button key={ratio} onClick={() => !isPlaying && setSelectedRatio(ratio)} className={`p-2 rounded-full transition-all ${selectedRatio === ratio ? 'bg-white/20 text-white' : 'text-gray-500 hover:text-white'}`}>
+                      {ASPECT_RATIOS[ratio].icon}
+                    </button>
+                  ))}
+              </div>
+
+             <div className={`relative shadow-2xl transition-all duration-300 bg-black rounded-lg overflow-hidden border border-white/10 ${ASPECT_RATIOS[selectedRatio].containerClass} ring-1 ring-white/10 shrink-0`}>
+                 <div className={`w-full h-full flex flex-col justify-center relative ${activeFrame.image ? 'bg-black' : activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
+                    
                     {activeFrame.image && <><img src={activeFrame.image} className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-black/50" /></>}
+                    {!activeFrame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
                     
                     <TransformableText 
                         text={activeFrame.text}
@@ -701,110 +722,122 @@ export default function App() {
                         onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
                         isPlaying={isPlaying}
                       />
-
-                    {!isPlaying && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] pointer-events-none">
-                         {/* Play button overlay removed for better editing UX, using text tap instead */}
-                      </div>
-                    )}
                  </div>
-              </div>
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur px-4 py-2 rounded-full text-xs text-gray-400 border border-white/10 flex items-center gap-2">
-                 <Move size={12}/> Drag to Move <Maximize size={12} className="ml-2"/> Corner to Scale <RotateCw size={12} className="ml-2"/> Top to Rotate
-              </div>
+                 {/* Safe Zone Indicator (Optional overlay) */}
+                 {!isPlaying && <div className="absolute inset-x-4 inset-y-12 border border-dashed border-white/10 rounded-lg pointer-events-none"></div>}
+             </div>
+             
+             {!isPlaying && (
+                <div className="mt-4 bg-black/80 backdrop-blur px-4 py-2 rounded-full text-xs text-gray-400 border border-white/10 flex items-center gap-2">
+                   <Move size={12}/> Drag to Move <Maximize size={12} className="ml-2"/> Corner to Scale <RotateCw size={12} className="ml-2"/> Top to Rotate
+                </div>
+             )}
            </div>
 
-           <div className="h-[45vh] bg-[#0f0f0f] border-t border-white/10 flex flex-col z-30 shadow-2xl">
-              <div className="h-16 border-b border-white/5 flex items-center px-4 gap-2 overflow-x-auto custom-scrollbar bg-[#050505]">
+           {/* Bottom Section: Editor Controls */}
+           <div className="h-[45vh] bg-[#0f0f0f] border-t border-white/10 flex flex-col z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+              {/* Scene Strip */}
+              <div className="h-20 border-b border-white/5 flex items-center px-4 gap-3 overflow-x-auto custom-scrollbar bg-[#050505] shrink-0">
                  {frames.map((frame, idx) => (
-                   <button key={frame.id} onClick={() => { setIsPlaying(false); setCurrentFrameIndex(idx); }} className={`relative h-12 min-w-[80px] rounded-md border-2 transition-all flex items-center justify-center overflow-hidden shrink-0 ${currentFrameIndex === idx ? 'border-purple-500 scale-105 z-10' : 'border-white/10 opacity-50 hover:opacity-100'}`}>
+                   <button key={frame.id} onClick={() => { setIsPlaying(false); setCurrentFrameIndex(idx); }} className={`relative h-14 min-w-[90px] rounded-lg border-2 transition-all flex items-center justify-center overflow-hidden shrink-0 group ${currentFrameIndex === idx ? 'border-purple-500 ring-2 ring-purple-500/30' : 'border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'}`}>
                      <div className={`absolute inset-0 opacity-50 ${frame.theme.bg}`}></div>
-                     <span className="relative z-10 text-[10px] font-bold truncate max-w-[90%] px-1 bg-black/50 rounded">{idx + 1}. {frame.text.substring(0,6)}..</span>
+                     {frame.image && <img src={frame.image} className="absolute inset-0 w-full h-full object-cover opacity-60" />}
+                     <span className="relative z-10 text-[10px] font-bold truncate max-w-[90%] px-1.5 py-0.5 bg-black/60 rounded backdrop-blur-sm text-white">{idx + 1}. {frame.text.substring(0,6)}..</span>
                    </button>
                  ))}
-                 <button onClick={handleAddFrame} className="h-10 w-10 rounded-full border border-dashed border-white/20 flex items-center justify-center text-gray-500 hover:text-white shrink-0 ml-2"><Plus size={18} /></button>
+                 <button onClick={handleAddFrame} className="h-12 w-12 rounded-full border border-dashed border-white/20 flex items-center justify-center text-gray-500 hover:text-white shrink-0 hover:bg-white/5 transition-all"><Plus size={20} /></button>
               </div>
 
-              <div className="flex-1 flex flex-col p-4 overflow-hidden">
-                 <div className="flex justify-center mb-4">
-                   <div className="flex bg-neutral-900 rounded-full p-1 border border-white/10">
+              {/* Tools Panel */}
+              <div className="flex-1 flex flex-col p-2 lg:p-4 overflow-hidden">
+                 <div className="flex justify-center mb-4 shrink-0">
+                   <div className="flex bg-neutral-900 rounded-full p-1 border border-white/10 shadow-lg">
                       {['theme', 'text', 'image', 'anim'].map(t => (
-                        <button key={t} onClick={() => setActiveTab(t)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all capitalize ${activeTab === t ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}>
+                        <button key={t} onClick={() => setActiveTab(t)} className={`px-5 py-2 rounded-full text-xs font-bold transition-all capitalize ${activeTab === t ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}>
                           {t === 'anim' ? 'Animation' : t}
                         </button>
                       ))}
                    </div>
                  </div>
 
-                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {activeTab === 'theme' && (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          {THEMES.map(t => (
-                            <button key={t.id} onClick={() => handleUpdateFrame(activeFrame.id, 'theme', t)} className={`p-3 rounded-xl border text-left transition-all relative overflow-hidden group ${activeFrame.theme.id === t.id ? 'border-purple-500 ring-1 ring-purple-500' : 'border-white/10 hover:border-white/30'}`}>
-                              <div className={`absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity ${t.bg}`}></div>
-                              <span className="relative z-10 text-xs font-bold">{t.name}</span>
-                              {activeFrame.theme.id === t.id && <Check className="absolute top-2 right-2 w-3 h-3 text-purple-400" />}
-                            </button>
-                          ))}
-                      </div>
-                    )}
+                 <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
+                    <div className="max-w-4xl mx-auto">
+                      {activeTab === 'theme' && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                            {THEMES.map(t => (
+                              <button key={t.id} onClick={() => handleUpdateFrame(activeFrame.id, 'theme', t)} className={`p-3 h-24 rounded-xl border text-left transition-all relative overflow-hidden group flex flex-col justify-end ${activeFrame.theme.id === t.id ? 'border-purple-500 ring-2 ring-purple-500/50 scale-105' : 'border-white/10 hover:border-white/30'}`}>
+                                <div className={`absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity ${t.bg}`}></div>
+                                <span className="relative z-10 text-xs font-bold shadow-black drop-shadow-md">{t.name}</span>
+                                {activeFrame.theme.id === t.id && <div className="absolute top-2 right-2 bg-purple-500 rounded-full p-0.5"><Check className="w-2.5 h-2.5 text-white" /></div>}
+                              </button>
+                            ))}
+                        </div>
+                      )}
 
-                    {activeTab === 'text' && (
-                       <div className="space-y-4">
-                          <textarea 
-                             value={activeFrame.text} 
-                             onChange={(e) => handleUpdateFrame(activeFrame.id, 'text', e.target.value)}
-                             className="w-full bg-neutral-900 rounded-xl p-3 text-sm border border-white/10 focus:border-purple-500 outline-none resize-none"
-                             rows={2}
-                             placeholder="Type your script here..."
-                           />
-                           
-                           <div className="grid grid-cols-2 gap-4">
-                              <div className="bg-neutral-900 p-3 rounded-xl border border-white/10 flex items-center justify-center">
-                                 <div className="text-xs text-gray-400 text-center">Font Size: <span className="text-white font-bold">Smart Auto</span></div>
-                              </div>
-                              <div className="bg-neutral-900 p-3 rounded-xl border border-white/10">
-                                 <label className="text-xs text-gray-500 font-bold mb-2 block uppercase">Align</label>
-                                 <div className="flex gap-1">
-                                    <button onClick={() => handleUpdateFrame(activeFrame.id, 'align', 'left')} className={`flex-1 py-1.5 rounded border flex items-center justify-center ${activeFrame.align === 'left' ? 'bg-purple-600 border-purple-500 text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}><AlignLeft size={14} /></button>
-                                    <button onClick={() => handleUpdateFrame(activeFrame.id, 'align', 'center')} className={`flex-1 py-1.5 rounded border flex items-center justify-center ${activeFrame.align === 'center' ? 'bg-purple-600 border-purple-500 text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}><AlignCenter size={14} /></button>
-                                    <button onClick={() => handleUpdateFrame(activeFrame.id, 'align', 'right')} className={`flex-1 py-1.5 rounded border flex items-center justify-center ${activeFrame.align === 'right' ? 'bg-purple-600 border-purple-500 text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}><AlignRight size={14} /></button>
-                                 </div>
-                              </div>
-                           </div>
-                           
-                           <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400">Reset Text Position</button>
-
-                           <button 
-                             onClick={() => handleUpdateFrame(activeFrame.id, 'aiVoice', !activeFrame.aiVoice)}
-                             className={`w-full py-3 rounded-xl border flex items-center justify-center gap-2 text-sm font-semibold transition-all ${activeFrame.aiVoice ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-neutral-900 border-white/10 text-gray-400'}`}
-                           >
-                              <Mic size={16} /> {activeFrame.aiVoice ? 'AI Voiceover: ON' : 'Enable AI Voiceover'}
-                           </button>
-                       </div>
-                    )}
-
-                    {activeTab === 'anim' && (
-                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {ANIMATIONS.map(a => (
-                            <button key={a.id} onClick={() => handleUpdateFrame(activeFrame.id, 'animation', a.id)} className={`p-3 rounded-xl border text-sm flex items-center gap-2 transition-all ${activeFrame.animation === a.id ? 'bg-purple-600/20 border-purple-500 text-purple-300' : 'bg-neutral-900 border-white/10 text-gray-400 hover:bg-neutral-800'}`}>
-                              <Zap size={14} /> {a.label}
-                            </button>
-                          ))}
-                       </div>
-                    )}
-
-                    {activeTab === 'image' && (
-                      <div className="space-y-4">
-                          <div className="bg-neutral-900 p-3 rounded-xl border border-white/10">
-                             <label className="text-xs text-gray-500 font-bold mb-2 block uppercase">Background Image URL</label>
-                             <div className="flex gap-2">
-                               <input type="text" value={activeFrame.image} onChange={(e) => handleUpdateFrame(activeFrame.id, 'image', e.target.value)} placeholder="Paste URL here..." className="flex-1 bg-black rounded px-3 py-2 text-xs border border-white/10 focus:border-purple-500 outline-none" />
-                               {activeFrame.image && <button onClick={() => handleUpdateFrame(activeFrame.id, 'image', '')} className="p-2 bg-red-500/20 text-red-500 rounded hover:bg-red-500 hover:text-white"><Trash2 size={14}/></button>}
+                      {activeTab === 'text' && (
+                          <div className="space-y-4 max-w-2xl mx-auto">
+                            <textarea 
+                               value={activeFrame.text} 
+                               onChange={(e) => handleUpdateFrame(activeFrame.id, 'text', e.target.value)}
+                               className="w-full bg-neutral-900 rounded-xl p-4 text-base border border-white/10 focus:border-purple-500 outline-none resize-none shadow-inner"
+                               rows={2}
+                               placeholder="Type your script here..."
+                             />
+                             
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-neutral-900 p-3 rounded-xl border border-white/10 flex items-center justify-center">
+                                   <div className="text-xs text-gray-400 text-center">Font Size: <span className="text-white font-bold ml-1">Auto Scale</span></div>
+                                </div>
+                                <div className="bg-neutral-900 p-3 rounded-xl border border-white/10">
+                                   <label className="text-[10px] text-gray-500 font-bold mb-2 block uppercase tracking-wider">Alignment</label>
+                                   <div className="flex gap-1">
+                                      {['left', 'center', 'right'].map(align => (
+                                          <button key={align} onClick={() => handleUpdateFrame(activeFrame.id, 'align', align)} className={`flex-1 py-1.5 rounded border flex items-center justify-center transition-colors ${activeFrame.align === align ? 'bg-purple-600 border-purple-500 text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}>
+                                              {align === 'left' && <AlignLeft size={14}/>}
+                                              {align === 'center' && <AlignCenter size={14}/>}
+                                              {align === 'right' && <AlignRight size={14}/>}
+                                          </button>
+                                      ))}
+                                   </div>
+                                </div>
+                             </div>
+                             
+                             <div className="flex gap-4">
+                               <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 border border-white/5">Reset Position</button>
+                               <button 
+                                 onClick={() => handleUpdateFrame(activeFrame.id, 'aiVoice', !activeFrame.aiVoice)}
+                                 className={`flex-1 py-2 rounded-lg border flex items-center justify-center gap-2 text-xs font-semibold transition-all ${activeFrame.aiVoice ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                               >
+                                  <Mic size={12} /> {activeFrame.aiVoice ? 'Voiceover Active' : 'Add Voiceover'}
+                               </button>
                              </div>
                           </div>
-                      </div>
-                    )}
+                      )}
+
+                      {activeTab === 'anim' && (
+                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {ANIMATIONS.map(a => (
+                              <button key={a.id} onClick={() => handleUpdateFrame(activeFrame.id, 'animation', a.id)} className={`p-4 rounded-xl border text-sm flex flex-col items-center justify-center gap-2 transition-all ${activeFrame.animation === a.id ? 'bg-purple-600/20 border-purple-500 text-purple-300' : 'bg-neutral-900 border-white/10 text-gray-400 hover:bg-neutral-800'}`}>
+                                <Zap size={18} className={activeFrame.animation === a.id ? 'text-purple-400' : 'text-gray-600'} /> 
+                                <span className="text-xs font-medium text-center">{a.label}</span>
+                              </button>
+                            ))}
+                         </div>
+                      )}
+
+                      {activeTab === 'image' && (
+                        <div className="space-y-4 max-w-lg mx-auto">
+                            <div className="bg-neutral-900 p-4 rounded-xl border border-white/10">
+                               <label className="text-xs text-gray-500 font-bold mb-3 block uppercase">Background Image URL</label>
+                               <div className="flex gap-2">
+                                 <input type="text" value={activeFrame.image} onChange={(e) => handleUpdateFrame(activeFrame.id, 'image', e.target.value)} placeholder="https://..." className="flex-1 bg-black rounded px-3 py-2 text-sm border border-white/10 focus:border-purple-500 outline-none" />
+                                 {activeFrame.image && <button onClick={() => handleUpdateFrame(activeFrame.id, 'image', '')} className="p-2 bg-red-500/20 text-red-500 rounded hover:bg-red-500 hover:text-white transition-colors"><Trash2 size={16}/></button>}
+                               </div>
+                               <p className="text-[10px] text-gray-600 mt-2">Paste a direct link to an image (Unsplash, etc.)</p>
+                            </div>
+                        </div>
+                      )}
+                    </div>
                  </div>
               </div>
            </div>
@@ -820,7 +853,7 @@ export default function App() {
                  <p className="text-gray-400">Jumpstart your viral journey with our pro-designed sets.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-20">
                  {PRO_TEMPLATES.map(template => (
                    <div key={template.id} onClick={() => setPreviewTemplate(template)} className="bg-neutral-900 border border-white/10 rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all hover:scale-[1.02] cursor-pointer group shadow-xl">
                       <div className={`h-40 ${template.previewColor} relative flex items-center justify-center`}>
@@ -833,10 +866,10 @@ export default function App() {
                       </div>
                       <div className="p-5">
                          <h3 className="font-bold text-lg mb-1">{template.name}</h3>
-                         <p className="text-xs text-gray-400 mb-4 h-8 leading-relaxed">{template.description}</p>
+                         <p className="text-xs text-gray-400 mb-4 h-8 leading-relaxed line-clamp-2">{template.description}</p>
                          <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
                             <span className="bg-white/5 px-2 py-1 rounded">{template.frames.length} Scenes</span>
-                            <span className="bg-white/5 px-2 py-1 rounded"><Sparkles className="w-3 h-3 inline mr-1 text-purple-400"/>Pro</span>
+                            <span className="bg-white/5 px-2 py-1 rounded text-purple-400 flex items-center gap-1"><Sparkles size={10}/> Pro Style</span>
                          </div>
                       </div>
                    </div>
