@@ -104,111 +104,113 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- IMPROVED TRANSFORMABLE TEXT COMPONENT ---
+// --- COMPLETELY REWRITTEN TRANSFORMABLE TEXT COMPONENT ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {}, 
   isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying,
   editMode
 }) => {
   const containerRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragState, setDragState] = useState({ type: null, wordIndex: null, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+  const [dragging, setDragging] = useState({ active: false, type: null, wordIndex: null });
+  const dragDataRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0, initialRotation: 0, initialScale: 1 });
 
   const getWordLayout = (index) => {
     return wordLayouts[index] || { x: 0, y: 0, rotation: 0 };
   };
 
-  const handlePointerDown = (e, type, wordIndex = null) => {
+  // Handle pointer down - start dragging
+  const handlePointerDown = useCallback((e, type, wordIndex = null) => {
     if (isPlaying) return;
     
-    // Stop event propagation to prevent conflicts
     e.stopPropagation();
     e.preventDefault();
 
-    // Check edit mode restrictions
+    // First click selects, second click drags
+    if (!isSelected) {
+      onSelect();
+      return;
+    }
+
+    // Check edit mode
     if (editMode === 'block' && type === 'word-drag') return;
     if (editMode === 'words' && type === 'drag') return;
 
-    // Select component if not selected
-    if (!isSelected) {
-      onSelect();
-      return; // First click just selects, second click starts drag
-    }
+    const clientX = e.clientX || (e.touches?.[0]?.clientX);
+    const clientY = e.clientY || (e.touches?.[0]?.clientY);
 
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-
-    setIsDragging(true);
+    if (!clientX || !clientY) return;
 
     if (type === 'word-drag' && wordIndex !== null) {
       const wl = getWordLayout(wordIndex);
-      setDragState({
-        type: 'word-drag',
-        wordIndex,
+      dragDataRef.current = {
         startX: clientX,
         startY: clientY,
         initialX: wl.x,
         initialY: wl.y
-      });
+      };
+      setDragging({ active: true, type: 'word-drag', wordIndex });
     } else if (type === 'drag') {
-      setDragState({
-        type: 'drag',
+      dragDataRef.current = {
         startX: clientX,
         startY: clientY,
         initialX: layout.x,
         initialY: layout.y
-      });
+      };
+      setDragging({ active: true, type: 'drag', wordIndex: null });
     } else if (type === 'rotate') {
-      setDragState({
-        type: 'rotate',
+      dragDataRef.current = {
         startX: clientX,
         startY: clientY,
         initialRotation: layout.rotation
-      });
+      };
+      setDragging({ active: true, type: 'rotate', wordIndex: null });
     } else if (type === 'scale') {
-      setDragState({
-        type: 'scale',
+      dragDataRef.current = {
         startY: clientY,
         initialScale: layout.scale
-      });
+      };
+      setDragging({ active: true, type: 'scale', wordIndex: null });
     }
-  };
+  }, [isPlaying, isSelected, editMode, layout, wordLayouts, onSelect]);
 
+  // Handle pointer move
   const handlePointerMove = useCallback((e) => {
-    if (!isDragging || !dragState.type) return;
+    if (!dragging.active) return;
 
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    e.preventDefault();
 
-    if (dragState.type === 'word-drag') {
-      // Calculate movement in screen space
-      const dx = clientX - dragState.startX;
-      const dy = clientY - dragState.startY;
+    const clientX = e.clientX || (e.touches?.[0]?.clientX);
+    const clientY = e.clientY || (e.touches?.[0]?.clientY);
 
-      // Transform screen movement to local coordinate system
-      // accounting for parent rotation and scale
+    if (!clientX || !clientY) return;
+
+    const { startX, startY, initialX, initialY, initialRotation, initialScale } = dragDataRef.current;
+
+    if (dragging.type === 'word-drag' && dragging.wordIndex !== null) {
+      // Calculate screen delta
+      const screenDx = clientX - startX;
+      const screenDy = clientY - startY;
+
+      // Transform to local coordinate system accounting for rotation and scale
       const rad = -layout.rotation * (Math.PI / 180);
       const cos = Math.cos(rad);
       const sin = Math.sin(rad);
       const scale = Math.max(0.1, layout.scale);
 
-      const localDx = (dx * cos - dy * sin) / scale;
-      const localDy = (dx * sin + dy * cos) / scale;
+      const localDx = (screenDx * cos - screenDy * sin) / scale;
+      const localDy = (screenDx * sin + screenDy * cos) / scale;
 
-      onUpdateWordLayout(dragState.wordIndex, {
-        x: dragState.initialX + localDx,
-        y: dragState.initialY + localDy
+      onUpdateWordLayout(dragging.wordIndex, {
+        x: initialX + localDx,
+        y: initialY + localDy
       });
 
-    } else if (dragState.type === 'drag') {
-      const dx = clientX - dragState.startX;
-      const dy = clientY - dragState.startY;
-      onUpdateLayout({ 
-        x: dragState.initialX + dx, 
-        y: dragState.initialY + dy 
-      });
+    } else if (dragging.type === 'drag') {
+      const dx = clientX - startX;
+      const dy = clientY - startY;
+      onUpdateLayout({ x: initialX + dx, y: initialY + dy });
 
-    } else if (dragState.type === 'rotate') {
+    } else if (dragging.type === 'rotate') {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
@@ -216,38 +218,39 @@ const TransformableText = ({
       const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
       onUpdateLayout({ rotation: angle + 90 });
 
-    } else if (dragState.type === 'scale') {
-      const dy = clientY - dragState.startY;
-      const newScale = Math.max(0.3, Math.min(3, dragState.initialScale - (dy * 0.005)));
+    } else if (dragging.type === 'scale') {
+      const dy = clientY - startY;
+      const newScale = Math.max(0.3, Math.min(3, initialScale - (dy * 0.005)));
       onUpdateLayout({ scale: newScale });
     }
-  }, [isDragging, dragState, layout, onUpdateLayout, onUpdateWordLayout]);
+  }, [dragging, layout, onUpdateLayout, onUpdateWordLayout]);
 
+  // Handle pointer up
   const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-    setDragState({ type: null, wordIndex: null, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+    setDragging({ active: false, type: null, wordIndex: null });
   }, []);
 
+  // Setup global event listeners
   useEffect(() => {
-    if (isDragging) {
-      const moveHandler = (e) => {
-        e.preventDefault();
-        handlePointerMove(e);
-      };
-      
-      window.addEventListener('mousemove', moveHandler);
-      window.addEventListener('touchmove', moveHandler, { passive: false });
-      window.addEventListener('mouseup', handlePointerUp);
-      window.addEventListener('touchend', handlePointerUp);
+    if (!dragging.active) return;
 
-      return () => {
-        window.removeEventListener('mousemove', moveHandler);
-        window.removeEventListener('touchmove', moveHandler);
-        window.removeEventListener('mouseup', handlePointerUp);
-        window.removeEventListener('touchend', handlePointerUp);
-      };
-    }
-  }, [isDragging, handlePointerMove, handlePointerUp]);
+    const handleMove = (e) => handlePointerMove(e);
+    const handleUp = () => handlePointerUp();
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchend', handleUp);
+    window.addEventListener('touchcancel', handleUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchend', handleUp);
+      window.removeEventListener('touchcancel', handleUp);
+    };
+  }, [dragging.active, handlePointerMove, handlePointerUp]);
 
   const smartSize = getSmartFontSize(text.length);
   const words = text.split(' ').filter(w => w.trim());
@@ -255,14 +258,14 @@ const TransformableText = ({
   return (
     <div 
       ref={containerRef}
-      className={`absolute inset-0 z-20 flex items-center justify-center px-8 ${isDragging ? 'cursor-grabbing' : ''}`}
+      className={`absolute inset-0 z-20 flex items-center justify-center px-8 ${dragging.active ? 'cursor-grabbing' : ''}`}
       style={{ 
         transform: `translate(${layout.x}px, ${layout.y}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
         transformOrigin: 'center center',
         touchAction: 'none'
       }}
       onClick={(e) => {
-        if (!isSelected) {
+        if (!isSelected && !isPlaying) {
           e.stopPropagation();
           onSelect();
         }
@@ -270,19 +273,27 @@ const TransformableText = ({
     >
       {/* Main Container */}
       <div 
-        className={`relative group transition-all duration-200 ${
+        className={`relative transition-all duration-200 ${
           isSelected && !isPlaying && editMode === 'block' 
             ? 'ring-2 ring-purple-500/80 bg-black/20 rounded-xl p-6 cursor-move' 
             : editMode === 'words' && !isPlaying && isSelected
             ? 'p-4 bg-black/5 rounded-xl border-2 border-dashed border-purple-400/40'
             : 'p-2'
         }`}
-        onMouseDown={(e) => editMode === 'block' && isSelected && handlePointerDown(e, 'drag')}
-        onTouchStart={(e) => editMode === 'block' && isSelected && handlePointerDown(e, 'drag')}
+        onMouseDown={(e) => {
+          if (editMode === 'block' && isSelected && !isPlaying) {
+            handlePointerDown(e, 'drag');
+          }
+        }}
+        onTouchStart={(e) => {
+          if (editMode === 'block' && isSelected && !isPlaying) {
+            handlePointerDown(e, 'drag');
+          }
+        }}
       >
         
-        {/* TEXT CONTENT WITH WORD-BY-WORD POSITIONING */}
-        <div className={`${theme.text} drop-shadow-2xl ${smartSize} ${getAlignmentClass(align)} select-none`}>
+        {/* TEXT CONTENT */}
+        <div className={`${theme.text} drop-shadow-2xl ${smartSize} ${getAlignmentClass(align)} select-none pointer-events-none`}>
           <div className="flex flex-wrap gap-x-2 gap-y-1 justify-center items-center">
             {words.map((word, i) => {
               const wl = getWordLayout(i);
@@ -297,7 +308,7 @@ const TransformableText = ({
                     ${i % 2 !== 0 ? theme.accent : ''} 
                     ${animation}
                     ${isWordDraggable 
-                      ? 'cursor-grab active:cursor-grabbing bg-purple-500/20 ring-2 ring-purple-400/50 rounded-lg px-2 py-1 hover:bg-purple-500/30 hover:scale-105 transition-all shadow-lg shadow-purple-900/20' 
+                      ? 'pointer-events-auto cursor-grab active:cursor-grabbing bg-purple-500/30 ring-2 ring-purple-400/70 rounded-lg px-3 py-1.5 hover:bg-purple-500/40 hover:scale-110 transition-all shadow-xl shadow-purple-900/30 backdrop-blur-sm' 
                       : ''
                     }
                   `}
@@ -305,10 +316,18 @@ const TransformableText = ({
                     transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
                     transformOrigin: 'center center',
                     animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
-                    zIndex: dragState.wordIndex === i ? 1000 : 1
+                    zIndex: dragging.wordIndex === i ? 1000 : 1
                   }}
-                  onMouseDown={(e) => isWordDraggable && handlePointerDown(e, 'word-drag', i)}
-                  onTouchStart={(e) => isWordDraggable && handlePointerDown(e, 'word-drag', i)}
+                  onMouseDown={(e) => {
+                    if (isWordDraggable) {
+                      handlePointerDown(e, 'word-drag', i);
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    if (isWordDraggable) {
+                      handlePointerDown(e, 'word-drag', i);
+                    }
+                  }}
                 >
                   {word}
                 </span>
@@ -317,38 +336,38 @@ const TransformableText = ({
           </div>
         </div>
 
-        {/* CONTROL HANDLES (Only in block mode when selected) */}
+        {/* CONTROL HANDLES - Block Mode */}
         {isSelected && !isPlaying && editMode === 'block' && (
           <>
             {/* Rotate Handle */}
             <div 
               onMouseDown={(e) => handlePointerDown(e, 'rotate')}
               onTouchStart={(e) => handlePointerDown(e, 'rotate')}
-              className="absolute -top-10 left-1/2 -translate-x-1/2 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center cursor-pointer shadow-xl hover:bg-gray-100 active:scale-95 transition-transform z-50 border-2 border-purple-500"
+              className="absolute -top-12 left-1/2 -translate-x-1/2 w-12 h-12 bg-white text-black rounded-full flex items-center justify-center cursor-pointer shadow-2xl hover:bg-gray-100 active:scale-95 transition-transform z-50 border-4 border-purple-500"
             >
-              <RotateCw size={16} strokeWidth={2.5} />
+              <RotateCw size={18} strokeWidth={2.5} />
             </div>
 
             {/* Scale Handle */}
             <div 
               onMouseDown={(e) => handlePointerDown(e, 'scale')}
               onTouchStart={(e) => handlePointerDown(e, 'scale')}
-              className="absolute -bottom-6 -right-6 w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-pointer shadow-xl hover:bg-purple-500 active:scale-95 transition-transform z-50 border-2 border-white"
+              className="absolute -bottom-6 -right-6 w-12 h-12 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-pointer shadow-2xl hover:bg-purple-500 active:scale-95 transition-transform z-50 border-4 border-white"
             >
-              <Maximize size={16} strokeWidth={2.5} />
+              <Maximize size={18} strokeWidth={2.5} />
             </div>
 
             {/* Instruction Label */}
-            <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 text-[11px] text-white/80 bg-black/80 px-4 py-1.5 rounded-full whitespace-nowrap pointer-events-none border border-white/20 shadow-lg font-medium">
-              Drag to Move • Corners to Transform
+            <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 text-xs text-white bg-black/90 px-4 py-2 rounded-full whitespace-nowrap pointer-events-none border-2 border-white/30 shadow-2xl font-semibold">
+              ↔️ Drag Block • 🔄 Top • 🔍 Corner
             </div>
           </>
         )}
 
         {/* WORD MODE INSTRUCTION */}
         {isSelected && !isPlaying && editMode === 'words' && (
-          <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 text-[11px] text-purple-300 bg-purple-900/80 px-4 py-1.5 rounded-full whitespace-nowrap pointer-events-none border border-purple-500/50 shadow-lg font-medium animate-pulse">
-            Click & Drag Individual Words
+          <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 text-xs text-purple-200 bg-purple-900/90 px-5 py-2 rounded-full whitespace-nowrap pointer-events-none border-2 border-purple-400/70 shadow-2xl font-bold animate-pulse">
+            ✨ Click & Drag Any Word ✨
           </div>
         )}
       </div>
@@ -539,7 +558,7 @@ export default function App() {
 
   const handleResetWordLayouts = (frameId) => {
      setFrames(frames.map(f => f.id === frameId ? { ...f, wordLayouts: {} } : f));
-     showToast("✨ Word positions reset!");
+     showToast("✨ All words reset to center!");
   };
 
   const handleRemoveFrame = (id) => {
@@ -572,7 +591,7 @@ export default function App() {
     setFrames(newFrames);
     setMode('simple'); 
     setPreviewTemplate(null);
-    showToast(`✨ ${template.name} Applied!`);
+    showToast(`✨ ${template.name} Template Applied!`);
   };
 
   const handleExport = () => {
@@ -582,7 +601,7 @@ export default function App() {
       setExportProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
-          setTimeout(() => { setIsExporting(false); showToast("🎉 Video Saved!"); }, 500);
+          setTimeout(() => { setIsExporting(false); showToast("🎉 Video Exported Successfully!"); }, 500);
           return 100;
         }
         return prev + Math.floor(Math.random() * 5) + 2;
@@ -857,8 +876,10 @@ export default function App() {
              </div>
              
              {!isPlaying && (
-                <div className="mt-4 bg-black/80 backdrop-blur px-4 py-2 rounded-full text-xs text-gray-400 border border-white/10 flex items-center gap-2">
-                   <Move size={12}/> Drag Block <Maximize size={12} className="ml-2"/> Corner to Scale <Grid size={12} className="ml-2 text-purple-400"/> <b>Click Words</b> to Scatter
+                <div className="mt-4 bg-black/80 backdrop-blur px-5 py-2 rounded-full text-xs text-gray-300 border border-white/20 flex items-center gap-3">
+                   <Move size={14} className="text-purple-400"/> <b>Block Mode:</b> Drag • Rotate • Scale
+                   <div className="w-px h-4 bg-white/20"></div>
+                   <Grid size={14} className="text-purple-400"/> <b>Words Mode:</b> Click & Drag Each Word
                 </div>
              )}
            </div>
@@ -927,24 +948,24 @@ export default function App() {
                                 </div>
                              </div>
                              
-                             <div className="bg-neutral-900 p-1 rounded-xl border border-white/10 flex items-center relative">
+                             <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 p-1 rounded-2xl border-2 border-purple-500/30 flex items-center relative shadow-lg">
                                 <button 
-                                  onClick={() => { setEditMode('block'); showToast("🎯 Move Whole Block"); }}
-                                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'block' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white'}`}
+                                  onClick={() => { setEditMode('block'); showToast("🎯 Block Mode Active"); }}
+                                  className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'block' ? 'bg-white text-black shadow-xl scale-105' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                                 >
-                                  <MousePointer2 size={14}/> Whole Block
+                                  <MousePointer2 size={16}/> Whole Block
                                 </button>
                                 <button 
-                                  onClick={() => { setEditMode('words'); showToast("✨ Scatter Words Mode"); }}
-                                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'words' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-white'}`}
+                                  onClick={() => { setEditMode('words'); showToast("✨ Word Scatter Active!"); }}
+                                  className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'words' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xl scale-105' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                                 >
-                                  <Grid size={14}/> Scatter Words
+                                  <Grid size={16}/> Scatter Words
                                 </button>
                              </div>
 
                              <div className="flex gap-4">
-                               <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 border border-white/5">Reset Block</button>
-                               <button onClick={() => handleResetWordLayouts(activeFrame.id)} className="flex-1 py-2 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-xs text-purple-400 border border-purple-500/30 flex items-center justify-center gap-1"><RotateCcw size={12}/> Reset Words</button>
+                               <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg text-sm text-gray-400 border border-white/5 font-medium">Reset Block</button>
+                               <button onClick={() => handleResetWordLayouts(activeFrame.id)} className="flex-1 py-2.5 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-sm text-purple-400 border border-purple-500/30 flex items-center justify-center gap-2 font-medium"><RotateCcw size={14}/> Reset Words</button>
                              </div>
                            </div>
                       )}
