@@ -4,7 +4,8 @@ import {
   Type, Layers, Image as ImageIcon, Clock, ArrowUp, ArrowDown, 
   Music, Crown, Check, X, Zap, LayoutTemplate, 
   ChevronLeft, Copy, AlignLeft, AlignCenter, AlignRight, Share2, Mic,
-  Library, Sparkles, Eye, Move, RotateCw, Maximize, RotateCcw
+  Library, Sparkles, Eye, Move, RotateCw, Maximize, RotateCcw,
+  MousePointer2, Grid
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -103,26 +104,30 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT (Enhanced for Word Manipulation) ---
+// --- TRANSFORMABLE TEXT COMPONENT (Redesigned for Strict Modes) ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {}, 
-  isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying 
+  isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying,
+  editMode // 'block' or 'words'
 }) => {
   const boxRef = useRef(null);
   const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0, type: null, wordIndex: null });
   const isDragging = useRef(false);
 
-  // Helper to get individual word layout or default
   const getWordLayout = (index) => {
     return wordLayouts[index] || { x: 0, y: 0, rotation: 0 };
   };
 
   const handleStart = (e, type, wordIndex = null) => {
     if (isPlaying) return;
-    e.stopPropagation(); // Stop event bubbling
+    
+    // STRICT MODE CHECK
+    if (editMode === 'block' && type === 'word-drag') return; // Cannot drag words in block mode
+    if (editMode === 'words' && type === 'drag') return;      // Cannot drag container in word mode
+    
+    e.stopPropagation(); 
     onSelect();
     
-    // Normalize touch/mouse
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
@@ -151,14 +156,12 @@ const TransformableText = ({
       const dy = clientY - dragStart.current.y;
 
       if (dragStart.current.type === 'word-drag') {
-         // MOVING INDIVIDUAL WORD
          const idx = dragStart.current.wordIndex;
          onUpdateWordLayout(idx, {
             x: dragStart.current.startX + dx,
             y: dragStart.current.startY + dy
          });
       } else if (dragStart.current.type === 'drag') {
-        // MOVING WHOLE CONTAINER
         onUpdateLayout({ x: dragStart.current.startX + dx, y: dragStart.current.startY + dy });
       } else if (dragStart.current.type === 'rotate') {
         if (!boxRef.current) return;
@@ -210,34 +213,35 @@ const TransformableText = ({
     >
       {/* Draggable Container Trigger */}
       <div 
-         className={`relative group transition-all duration-200 ${isSelected && !isPlaying ? 'ring-2 ring-purple-500/80 bg-black/30 rounded-lg p-4 cursor-move' : 'p-2'}`}
-         onMouseDown={(e) => handleStart(e, 'drag')}
-         onTouchStart={(e) => handleStart(e, 'drag')}
+         className={`relative group transition-all duration-200 
+           ${isSelected && !isPlaying && editMode === 'block' ? 'ring-2 ring-purple-500/80 bg-black/30 rounded-lg p-4 cursor-move' : ''}
+           ${editMode === 'words' && !isPlaying ? 'p-4 bg-black/10 rounded-lg border border-dashed border-white/20' : 'p-2'}
+         `}
+         onMouseDown={(e) => editMode === 'block' && handleStart(e, 'drag')}
+         onTouchStart={(e) => editMode === 'block' && handleStart(e, 'drag')}
       >
         
         {/* TEXT CONTENT - WORD BY WORD RENDERING */}
         <div className={`${theme.text} drop-shadow-xl ${smartSize} text-center ${getAlignmentClass(align)}`}>
            {words.map((word, i) => {
              const wl = getWordLayout(i);
-             const isWordMoved = wl.x !== 0 || wl.y !== 0;
-             
              return (
                <span 
                  key={i} 
-                 className={`inline-block relative ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation} ${isSelected && !isPlaying ? 'cursor-grab hover:text-purple-300 transition-colors' : ''}`} 
+                 className={`
+                   inline-block relative ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation} 
+                   ${isSelected && !isPlaying && editMode === 'words' ? 'cursor-grab bg-purple-500/20 ring-1 ring-purple-400 rounded px-1 mx-1' : 'mx-1'}
+                 `} 
                  style={{ 
                     animationDelay: isPlaying ? `${i * 0.25}s` : '0s',
                     transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
-                    display: 'inline-block' 
+                    display: 'inline-block',
+                    padding: isSelected && editMode === 'words' ? '4px 8px' : '0' // Larger hit area on mobile
                  }}
-                 onMouseDown={(e) => isSelected && !isPlaying && handleStart(e, 'word-drag', i)}
-                 onTouchStart={(e) => isSelected && !isPlaying && handleStart(e, 'word-drag', i)}
+                 onMouseDown={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
+                 onTouchStart={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
                >
-                 {word}&nbsp;
-                 {/* Visual hint for moved words */}
-                 {!isPlaying && isSelected && isWordMoved && (
-                    <span className="absolute -top-2 -right-2 w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
-                 )}
+                 {word}
                </span>
              );
            })}
@@ -246,24 +250,28 @@ const TransformableText = ({
         {/* CONTROLS (Only visible when selected & not playing) */}
         {isSelected && !isPlaying && (
           <>
-            <div 
-              onMouseDown={(e) => handleStart(e, 'rotate')}
-              onTouchStart={(e) => handleStart(e, 'rotate')}
-              className="absolute -top-8 left-1/2 -translate-x-1/2 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform z-30"
-            >
-              <RotateCw size={14} strokeWidth={3} />
-            </div>
-
-            <div 
-              onMouseDown={(e) => handleStart(e, 'scale')}
-              onTouchStart={(e) => handleStart(e, 'scale')}
-              className="absolute -bottom-4 -right-4 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform z-30"
-            >
-               <Maximize size={14} strokeWidth={3} />
-            </div>
+            {/* Rotate/Scale only available in Block Mode to avoid confusion */}
+            {editMode === 'block' && (
+              <>
+                <div 
+                  onMouseDown={(e) => handleStart(e, 'rotate')}
+                  onTouchStart={(e) => handleStart(e, 'rotate')}
+                  className="absolute -top-8 left-1/2 -translate-x-1/2 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform z-30"
+                >
+                  <RotateCw size={14} strokeWidth={3} />
+                </div>
+                <div 
+                  onMouseDown={(e) => handleStart(e, 'scale')}
+                  onTouchStart={(e) => handleStart(e, 'scale')}
+                  className="absolute -bottom-4 -right-4 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform z-30"
+                >
+                  <Maximize size={14} strokeWidth={3} />
+                </div>
+              </>
+            )}
             
-            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] text-white/50 bg-black/50 px-2 rounded whitespace-nowrap pointer-events-none">
-                Drag specific words to scatter
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-white/70 bg-black/60 px-3 py-1 rounded-full whitespace-nowrap pointer-events-none border border-white/10">
+                {editMode === 'block' ? 'Drag to Move Block' : 'Drag Individual Words'}
             </div>
           </>
         )}
@@ -350,6 +358,9 @@ export default function App() {
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [selectedElementId, setSelectedElementId] = useState(null); 
+  
+  // NEW: Toggle between 'block' (move whole sentence) and 'words' (move individual words)
+  const [editMode, setEditMode] = useState('block'); 
 
   // REFS FOR SMOOTH PLAYBACK
   const requestRef = useRef();
@@ -439,7 +450,6 @@ export default function App() {
       setFrames(frames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
   };
 
-  // --- NEW: HANDLE INDIVIDUAL WORD LAYOUT UPDATES ---
   const handleUpdateWordLayout = (frameId, wordIndex, newLayoutProps) => {
       setFrames(frames.map(f => {
           if (f.id !== frameId) return f;
@@ -714,6 +724,7 @@ export default function App() {
                         onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
                         onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
                         isPlaying={isPlaying}
+                        editMode={editMode}
                       />
                     ) : (
                       <div className="space-y-6 opacity-40 w-full text-center">
@@ -769,6 +780,7 @@ export default function App() {
                         onUpdateLayout={(newLayout) => handleUpdateLayout(activeFrame.id, newLayout)}
                         onUpdateWordLayout={(wordIdx, newLayout) => handleUpdateWordLayout(activeFrame.id, wordIdx, newLayout)}
                         isPlaying={isPlaying}
+                        editMode={editMode}
                       />
                  </div>
                  
@@ -851,6 +863,23 @@ export default function App() {
                                    </div>
                                 </div>
                              </div>
+                             
+                             {/* --- NEW EDIT MODE TOGGLE --- */}
+                             <div className="bg-neutral-900 p-1 rounded-xl border border-white/10 flex items-center relative">
+                                <button 
+                                  onClick={() => { setEditMode('block'); showToast("Move the whole block"); }}
+                                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'block' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                  <MousePointer2 size={14}/> Whole Block
+                                </button>
+                                <button 
+                                  onClick={() => { setEditMode('words'); showToast("Drag individual words now"); }}
+                                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'words' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                  <Grid size={14}/> Scatter Words
+                                </button>
+                             </div>
+
                              <div className="flex gap-4">
                                <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 border border-white/5">Reset Block</button>
                                <button onClick={() => handleResetWordLayouts(activeFrame.id)} className="flex-1 py-2 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-xs text-purple-400 border border-purple-500/30 flex items-center justify-center gap-1"><RotateCcw size={12}/> Reset Words</button>
