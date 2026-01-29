@@ -104,228 +104,252 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT (ROBUST SCATTER LOGIC) ---
+// --- IMPROVED TRANSFORMABLE TEXT COMPONENT ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {}, 
   isSelected, onSelect, onUpdateLayout, onUpdateWordLayout, isPlaying,
-  editMode // 'block' or 'words'
+  editMode
 }) => {
-  const boxRef = useRef(null);
-  const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0, type: null, wordIndex: null });
-  const isDragging = useRef(false);
-  
-  // Ref to access latest props in event handlers without stale closures
-  const latestProps = useRef({ layout, wordLayouts, onUpdateLayout, onUpdateWordLayout });
-  useEffect(() => {
-    latestProps.current = { layout, wordLayouts, onUpdateLayout, onUpdateWordLayout };
-  });
+  const containerRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragState, setDragState] = useState({ type: null, wordIndex: null, startX: 0, startY: 0, initialX: 0, initialY: 0 });
 
   const getWordLayout = (index) => {
     return wordLayouts[index] || { x: 0, y: 0, rotation: 0 };
   };
 
-  const handleStart = (e, type, wordIndex = null) => {
+  const handlePointerDown = (e, type, wordIndex = null) => {
     if (isPlaying) return;
     
-    // STOP PROPAGATION IS KEY HERE
-    // This prevents the parent 'block drag' from firing when we click a specific word
-    e.stopPropagation(); 
+    // Stop event propagation to prevent conflicts
+    e.stopPropagation();
+    e.preventDefault();
 
-    // Prevent default to stop scrolling on mobile while dragging
-    if(e.type === 'touchstart') {
-       // We only prevent default if we are actually starting a valid drag action
-       // otherwise we might block scrolling entirely
+    // Check edit mode restrictions
+    if (editMode === 'block' && type === 'word-drag') return;
+    if (editMode === 'words' && type === 'drag') return;
+
+    // Select component if not selected
+    if (!isSelected) {
+      onSelect();
+      return; // First click just selects, second click starts drag
     }
 
-    // Logic Gate: Disallow interactions based on editMode
-    if (editMode === 'block' && type === 'word-drag') return; 
-    if (editMode === 'words' && type === 'drag') return; 
-    
-    // Select the component if it isn't already
-    if (!isSelected) onSelect();
-    
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
 
-    isDragging.current = true;
-    
+    setIsDragging(true);
+
     if (type === 'word-drag' && wordIndex !== null) {
-       const wl = getWordLayout(wordIndex);
-       dragStart.current = { 
-         x: clientX, y: clientY, 
-         startX: wl.x, startY: wl.y, 
-         type: 'word-drag', wordIndex 
-       };
+      const wl = getWordLayout(wordIndex);
+      setDragState({
+        type: 'word-drag',
+        wordIndex,
+        startX: clientX,
+        startY: clientY,
+        initialX: wl.x,
+        initialY: wl.y
+      });
     } else if (type === 'drag') {
-       dragStart.current = { x: clientX, y: clientY, startX: layout.x, startY: layout.y, type: 'drag' };
+      setDragState({
+        type: 'drag',
+        startX: clientX,
+        startY: clientY,
+        initialX: layout.x,
+        initialY: layout.y
+      });
     } else if (type === 'rotate') {
-       dragStart.current = { x: clientX, y: clientY, startRotation: layout.rotation, type: 'rotate' };
+      setDragState({
+        type: 'rotate',
+        startX: clientX,
+        startY: clientY,
+        initialRotation: layout.rotation
+      });
     } else if (type === 'scale') {
-       dragStart.current = { x: clientX, y: clientY, startScale: layout.scale, type: 'scale' };
+      setDragState({
+        type: 'scale',
+        startY: clientY,
+        initialScale: layout.scale
+      });
     }
   };
 
-  useEffect(() => {
-    const handleMove = (clientX, clientY) => {
-      if (!isDragging.current) return;
-      
-      const props = latestProps.current; 
-      const { layout } = props;
+  const handlePointerMove = useCallback((e) => {
+    if (!isDragging || !dragState.type) return;
 
-      // Raw distance moved on screen
-      const screenDx = clientX - dragStart.current.x;
-      const screenDy = clientY - dragStart.current.y;
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
 
-      if (dragStart.current.type === 'word-drag') {
-         // --- MATH FIX: PROJECT SCREEN DELTA TO LOCAL ROTATED SPACE ---
-         // When the container is rotated/scaled, moving the mouse 'right' on screen
-         // might effectively be 'down' or 'left' in the container's coordinate system.
-         
-         // 1. Invert the rotation (radians)
-         const rad = -layout.rotation * (Math.PI / 180);
-         const cos = Math.cos(rad);
-         const sin = Math.sin(rad);
-         
-         // 2. Rotate the delta vector and Scale it down
-         const localDx = (screenDx * cos - screenDy * sin) / Math.max(0.1, layout.scale);
-         const localDy = (screenDx * sin + screenDy * cos) / Math.max(0.1, layout.scale);
+    if (dragState.type === 'word-drag') {
+      // Calculate movement in screen space
+      const dx = clientX - dragState.startX;
+      const dy = clientY - dragState.startY;
 
-         const idx = dragStart.current.wordIndex;
-         props.onUpdateWordLayout(idx, {
-            x: dragStart.current.startX + localDx,
-            y: dragStart.current.startY + localDy
-         });
+      // Transform screen movement to local coordinate system
+      // accounting for parent rotation and scale
+      const rad = -layout.rotation * (Math.PI / 180);
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const scale = Math.max(0.1, layout.scale);
 
-      } else if (dragStart.current.type === 'drag') {
-         // Moving the whole block works in parent (screen) coordinates
-         props.onUpdateLayout({ x: dragStart.current.startX + screenDx, y: dragStart.current.startY + screenDy });
+      const localDx = (dx * cos - dy * sin) / scale;
+      const localDy = (dx * sin + dy * cos) / scale;
 
-      } else if (dragStart.current.type === 'rotate') {
-         if (!boxRef.current) return;
-         const rect = boxRef.current.getBoundingClientRect();
-         const centerX = rect.left + rect.width / 2;
-         const centerY = rect.top + rect.height / 2;
-         const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
-         props.onUpdateLayout({ rotation: angle + 90 }); 
-      } else if (dragStart.current.type === 'scale') {
-         // Scale based on Y movement
-         const newScale = Math.max(0.2, dragStart.current.startScale + (screenDy * 0.01));
-         props.onUpdateLayout({ scale: newScale });
-      }
-    };
+      onUpdateWordLayout(dragState.wordIndex, {
+        x: dragState.initialX + localDx,
+        y: dragState.initialY + localDy
+      });
 
-    const handleEnd = () => {
-      isDragging.current = false;
-      dragStart.current.type = null;
-    };
+    } else if (dragState.type === 'drag') {
+      const dx = clientX - dragState.startX;
+      const dy = clientY - dragState.startY;
+      onUpdateLayout({ 
+        x: dragState.initialX + dx, 
+        y: dragState.initialY + dy 
+      });
 
-    // Attach to window to catch movements outside the box
-    const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
-    const onTouchMove = (e) => {
-        if(isDragging.current) e.preventDefault(); // Stop scrolling while dragging
-        handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
+    } else if (dragState.type === 'rotate') {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const angle = Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
+      onUpdateLayout({ rotation: angle + 90 });
 
-    if (isSelected) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', handleEnd);
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', handleEnd);
+    } else if (dragState.type === 'scale') {
+      const dy = clientY - dragState.startY;
+      const newScale = Math.max(0.3, Math.min(3, dragState.initialScale - (dy * 0.005)));
+      onUpdateLayout({ scale: newScale });
     }
+  }, [isDragging, dragState, layout, onUpdateLayout, onUpdateWordLayout]);
 
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', handleEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', handleEnd);
-    };
-  }, [isSelected]); 
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+    setDragState({ type: null, wordIndex: null, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      const moveHandler = (e) => {
+        e.preventDefault();
+        handlePointerMove(e);
+      };
+      
+      window.addEventListener('mousemove', moveHandler);
+      window.addEventListener('touchmove', moveHandler, { passive: false });
+      window.addEventListener('mouseup', handlePointerUp);
+      window.addEventListener('touchend', handlePointerUp);
+
+      return () => {
+        window.removeEventListener('mousemove', moveHandler);
+        window.removeEventListener('touchmove', moveHandler);
+        window.removeEventListener('mouseup', handlePointerUp);
+        window.removeEventListener('touchend', handlePointerUp);
+      };
+    }
+  }, [isDragging, handlePointerMove, handlePointerUp]);
 
   const smartSize = getSmartFontSize(text.length);
-  const words = text.split(' ');
+  const words = text.split(' ').filter(w => w.trim());
 
   return (
     <div 
-      ref={boxRef}
-      className={`absolute z-20 flex items-center justify-center w-full px-8 touch-none`}
+      ref={containerRef}
+      className={`absolute inset-0 z-20 flex items-center justify-center px-8 ${isDragging ? 'cursor-grabbing' : ''}`}
       style={{ 
         transform: `translate(${layout.x}px, ${layout.y}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
-        transformOrigin: 'center center'
+        transformOrigin: 'center center',
+        touchAction: 'none'
+      }}
+      onClick={(e) => {
+        if (!isSelected) {
+          e.stopPropagation();
+          onSelect();
+        }
       }}
     >
-      {/* Draggable Container Trigger */}
+      {/* Main Container */}
       <div 
-         className={`relative group transition-all duration-200 
-           ${isSelected && !isPlaying && editMode === 'block' ? 'ring-2 ring-purple-500/80 bg-black/30 rounded-lg p-4 cursor-move' : ''}
-           ${editMode === 'words' && !isPlaying ? 'p-4 bg-black/10 rounded-lg border border-dashed border-white/20' : 'p-2'}
-         `}
-         onMouseDown={(e) => editMode === 'block' && handleStart(e, 'drag')}
-         onTouchStart={(e) => editMode === 'block' && handleStart(e, 'drag')}
+        className={`relative group transition-all duration-200 ${
+          isSelected && !isPlaying && editMode === 'block' 
+            ? 'ring-2 ring-purple-500/80 bg-black/20 rounded-xl p-6 cursor-move' 
+            : editMode === 'words' && !isPlaying && isSelected
+            ? 'p-4 bg-black/5 rounded-xl border-2 border-dashed border-purple-400/40'
+            : 'p-2'
+        }`}
+        onMouseDown={(e) => editMode === 'block' && isSelected && handlePointerDown(e, 'drag')}
+        onTouchStart={(e) => editMode === 'block' && isSelected && handlePointerDown(e, 'drag')}
       >
         
-        {/* TEXT CONTENT - WORD BY WORD RENDERING */}
-        <div className={`${theme.text} drop-shadow-xl ${smartSize} text-center ${getAlignmentClass(align)}`}>
-           {words.map((word, i) => {
-             const wl = getWordLayout(i);
-             return (
-               <span 
-                 key={i} 
-                 className={`
-                   inline-block relative ${isPlaying ? 'word-hidden' : ''} ${i % 2 !== 0 ? theme.accent : ''} ${animation} 
-                   ${isSelected && !isPlaying && editMode === 'words' 
-                      ? 'cursor-grab bg-purple-500/30 ring-1 ring-purple-400 rounded px-1 mx-1 z-[100] pointer-events-auto hover:bg-purple-500/50' 
-                      : 'mx-1'}
-                 `} 
-                 style={{ 
-                   // Apply scatter transform on top of everything
-                   transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
-                   display: 'inline-block',
-                   padding: isSelected && editMode === 'words' ? '4px 8px' : '0'
-                 }}
-                 onMouseDown={(e) => {
-                    if (isSelected && !isPlaying && editMode === 'words') {
-                        handleStart(e, 'word-drag', i);
+        {/* TEXT CONTENT WITH WORD-BY-WORD POSITIONING */}
+        <div className={`${theme.text} drop-shadow-2xl ${smartSize} ${getAlignmentClass(align)} select-none`}>
+          <div className="flex flex-wrap gap-x-2 gap-y-1 justify-center items-center">
+            {words.map((word, i) => {
+              const wl = getWordLayout(i);
+              const isWordDraggable = isSelected && !isPlaying && editMode === 'words';
+              
+              return (
+                <span 
+                  key={i}
+                  className={`
+                    inline-block relative whitespace-nowrap
+                    ${isPlaying ? 'word-hidden' : ''} 
+                    ${i % 2 !== 0 ? theme.accent : ''} 
+                    ${animation}
+                    ${isWordDraggable 
+                      ? 'cursor-grab active:cursor-grabbing bg-purple-500/20 ring-2 ring-purple-400/50 rounded-lg px-2 py-1 hover:bg-purple-500/30 hover:scale-105 transition-all shadow-lg shadow-purple-900/20' 
+                      : ''
                     }
-                 }}
-                 onTouchStart={(e) => {
-                    if (isSelected && !isPlaying && editMode === 'words') {
-                        handleStart(e, 'word-drag', i);
-                    }
-                 }}
-               >
-                 {word}
-               </span>
-             );
-           })}
+                  `}
+                  style={{ 
+                    transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
+                    transformOrigin: 'center center',
+                    animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
+                    zIndex: dragState.wordIndex === i ? 1000 : 1
+                  }}
+                  onMouseDown={(e) => isWordDraggable && handlePointerDown(e, 'word-drag', i)}
+                  onTouchStart={(e) => isWordDraggable && handlePointerDown(e, 'word-drag', i)}
+                >
+                  {word}
+                </span>
+              );
+            })}
+          </div>
         </div>
 
-        {/* CONTROLS (Only visible when selected & not playing) */}
-        {isSelected && !isPlaying && (
+        {/* CONTROL HANDLES (Only in block mode when selected) */}
+        {isSelected && !isPlaying && editMode === 'block' && (
           <>
-            {/* Rotate/Scale only available in Block Mode to avoid confusion */}
-            {editMode === 'block' && (
-              <>
-                <div 
-                  onMouseDown={(e) => handleStart(e, 'rotate')}
-                  onTouchStart={(e) => handleStart(e, 'rotate')}
-                  className="absolute -top-8 left-1/2 -translate-x-1/2 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center cursor-ew-resize shadow-lg hover:bg-purple-100 active:scale-95 transition-transform z-30"
-                >
-                  <RotateCw size={14} strokeWidth={3} />
-                </div>
-                <div 
-                  onMouseDown={(e) => handleStart(e, 'scale')}
-                  onTouchStart={(e) => handleStart(e, 'scale')}
-                  className="absolute -bottom-4 -right-4 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-lg hover:bg-purple-500 active:scale-95 transition-transform z-30"
-                >
-                  <Maximize size={14} strokeWidth={3} />
-                </div>
-              </>
-            )}
-            
-            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-[10px] text-white/70 bg-black/60 px-3 py-1 rounded-full whitespace-nowrap pointer-events-none border border-white/10 z-50">
-                {editMode === 'block' ? 'Drag to Move Block' : 'Drag Individual Words'}
+            {/* Rotate Handle */}
+            <div 
+              onMouseDown={(e) => handlePointerDown(e, 'rotate')}
+              onTouchStart={(e) => handlePointerDown(e, 'rotate')}
+              className="absolute -top-10 left-1/2 -translate-x-1/2 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center cursor-pointer shadow-xl hover:bg-gray-100 active:scale-95 transition-transform z-50 border-2 border-purple-500"
+            >
+              <RotateCw size={16} strokeWidth={2.5} />
+            </div>
+
+            {/* Scale Handle */}
+            <div 
+              onMouseDown={(e) => handlePointerDown(e, 'scale')}
+              onTouchStart={(e) => handlePointerDown(e, 'scale')}
+              className="absolute -bottom-6 -right-6 w-10 h-10 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-pointer shadow-xl hover:bg-purple-500 active:scale-95 transition-transform z-50 border-2 border-white"
+            >
+              <Maximize size={16} strokeWidth={2.5} />
+            </div>
+
+            {/* Instruction Label */}
+            <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 text-[11px] text-white/80 bg-black/80 px-4 py-1.5 rounded-full whitespace-nowrap pointer-events-none border border-white/20 shadow-lg font-medium">
+              Drag to Move • Corners to Transform
             </div>
           </>
+        )}
+
+        {/* WORD MODE INSTRUCTION */}
+        {isSelected && !isPlaying && editMode === 'words' && (
+          <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 text-[11px] text-purple-300 bg-purple-900/80 px-4 py-1.5 rounded-full whitespace-nowrap pointer-events-none border border-purple-500/50 shadow-lg font-medium animate-pulse">
+            Click & Drag Individual Words
+          </div>
         )}
       </div>
     </div>
@@ -410,18 +434,15 @@ export default function App() {
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [selectedElementId, setSelectedElementId] = useState(null); 
-  
-  // NEW: Toggle between 'block' (move whole sentence) and 'words' (move individual words)
-  const [editMode, setEditMode] = useState('block'); 
+  const [editMode, setEditMode] = useState('block');
 
-  // REFS FOR SMOOTH PLAYBACK
   const requestRef = useRef();
   const startTimeRef = useRef(0);
   const progressBarRef = useRef(null);
   const scrollRef = useRef(null);
   const previewRef = useRef(null);
 
-  // --- PLAYBACK ENGINE (TIME BASED) ---
+  // --- PLAYBACK ENGINE ---
   const getTotalDuration = () => frames.reduce((total, frame) => total + (frame.duration * 1000), 0);
 
   const animate = (time) => {
@@ -479,7 +500,7 @@ export default function App() {
   
   const togglePlay = () => isPlaying ? handleStop() : handlePlay();
 
-  // --- CRUD & LAYOUT HANDLERS (STABILIZED WITH USECALLBACK) ---
+  // --- CRUD & LAYOUT HANDLERS ---
   const handleAddFrame = () => {
     const newId = Date.now();
     const lastFrame = frames[frames.length - 1];
@@ -489,7 +510,7 @@ export default function App() {
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
       aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 },
-      wordLayouts: {} // Init word layouts
+      wordLayouts: {}
     }]);
     setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
   };
@@ -498,7 +519,6 @@ export default function App() {
     setFrames(frames.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
   
-  // Wrapped in useCallback to prevent child re-renders breaking drag events
   const handleUpdateLayout = useCallback((id, newLayoutProps) => {
       setFrames(prevFrames => prevFrames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
   }, []);
@@ -519,7 +539,7 @@ export default function App() {
 
   const handleResetWordLayouts = (frameId) => {
      setFrames(frames.map(f => f.id === frameId ? { ...f, wordLayouts: {} } : f));
-     showToast("Word positions reset");
+     showToast("✨ Word positions reset!");
   };
 
   const handleRemoveFrame = (id) => {
@@ -527,15 +547,17 @@ export default function App() {
     setFrames(frames.filter(f => f.id !== id));
     if (currentFrameIndex >= frames.length - 1) setCurrentFrameIndex(Math.max(0, frames.length - 2));
   };
+
   const handleDuplicateFrame = (id) => {
     const frameToCopy = frames.find(f => f.id === id);
     if (!frameToCopy) return;
-    const newFrame = { ...frameToCopy, id: Date.now() };
+    const newFrame = { ...frameToCopy, id: Date.now(), wordLayouts: { ...frameToCopy.wordLayouts } };
     const index = frames.findIndex(f => f.id === id);
     const newFrames = [...frames];
     newFrames.splice(index + 1, 0, newFrame);
     setFrames(newFrames);
   };
+
   const handleMoveFrame = (index, direction) => {
     if ((direction === -1 && index === 0) || (direction === 1 && index === frames.length - 1)) return;
     const newFrames = [...frames];
@@ -544,12 +566,13 @@ export default function App() {
     newFrames[index + direction] = temp;
     setFrames(newFrames);
   };
+
   const handleApplyTemplate = (template) => {
     const newFrames = template.frames.map(f => ({...f, id: Date.now() + Math.random(), wordLayouts: {}}));
     setFrames(newFrames);
     setMode('simple'); 
     setPreviewTemplate(null);
-    showToast(`Applied ${template.name} Template!`);
+    showToast(`✨ ${template.name} Applied!`);
   };
 
   const handleExport = () => {
@@ -559,7 +582,7 @@ export default function App() {
       setExportProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
-          setTimeout(() => { setIsExporting(false); showToast("Video Saved to Gallery! 📸"); }, 500);
+          setTimeout(() => { setIsExporting(false); showToast("🎉 Video Saved!"); }, 500);
           return 100;
         }
         return prev + Math.floor(Math.random() * 5) + 2;
@@ -600,7 +623,6 @@ export default function App() {
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
       `}</style>
 
-      {/* Preview Modal */}
       {previewTemplate && (
         <TemplatePreviewModal 
           template={previewTemplate} 
@@ -609,7 +631,6 @@ export default function App() {
         />
       )}
 
-      {/* Export Progress Overlay */}
       {isExporting && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
            <div className="w-64 space-y-4 text-center">
@@ -626,7 +647,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Pricing Modal */}
       {isPricingOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsPricingOpen(false)}></div>
@@ -643,14 +663,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Toast */}
       <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ${toast.show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
         <div className="bg-white text-black px-6 py-3 rounded-full font-medium shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center gap-2">
            <Zap className="w-4 h-4 text-purple-600" /> {toast.message}
         </div>
       </div>
 
-      {/* --- HEADER --- */}
       <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-3">
           {mode !== 'simple' ? (
@@ -679,9 +697,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* --- CONTENT AREA: SWITCHES BASED ON MODE --- */}
-      
-      {/* 1. SIMPLE MODE */}
       {mode === 'simple' && (
         <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 overflow-hidden lg:h-[calc(100vh-64px)] h-auto">
           
@@ -786,7 +801,6 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {/* SMOOTH PROGRESS BAR (Ref based) */}
                   <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
                       <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
                   </div>
@@ -796,11 +810,9 @@ export default function App() {
         </main>
       )}
 
-      {/* 2. CUSTOM STUDIO MODE */}
       {mode === 'custom' && (
         <div className="flex-1 flex flex-col h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
            
-           {/* Top Section: Preview Area */}
            <div className="flex-1 bg-[#121212] relative flex flex-col items-center justify-center p-4 min-h-0">
              
              <div className="absolute top-4 z-40 bg-black/50 backdrop-blur-md p-1 rounded-full border border-white/10 flex gap-2">
@@ -837,7 +849,6 @@ export default function App() {
                      />
                  </div>
                  
-                 {/* SMOOTH PROGRESS BAR (Ref based) */}
                  <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
                     <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
                  </div>
@@ -847,12 +858,11 @@ export default function App() {
              
              {!isPlaying && (
                 <div className="mt-4 bg-black/80 backdrop-blur px-4 py-2 rounded-full text-xs text-gray-400 border border-white/10 flex items-center gap-2">
-                   <Move size={12}/> Drag Block <Maximize size={12} className="ml-2"/> Corner to Scale <Move size={12} className="ml-2 text-purple-400"/> <b>Click & Drag Words</b> to Scatter
+                   <Move size={12}/> Drag Block <Maximize size={12} className="ml-2"/> Corner to Scale <Grid size={12} className="ml-2 text-purple-400"/> <b>Click Words</b> to Scatter
                 </div>
              )}
            </div>
 
-           {/* Bottom Section: Editor Controls */}
            <div className="h-[45vh] bg-[#0f0f0f] border-t border-white/10 flex flex-col z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
               <div className="h-20 border-b border-white/5 flex items-center px-4 gap-3 overflow-x-auto custom-scrollbar bg-[#050505] shrink-0">
                  {frames.map((frame, idx) => (
@@ -917,17 +927,16 @@ export default function App() {
                                 </div>
                              </div>
                              
-                             {/* --- NEW EDIT MODE TOGGLE --- */}
                              <div className="bg-neutral-900 p-1 rounded-xl border border-white/10 flex items-center relative">
                                 <button 
-                                  onClick={() => { setEditMode('block'); showToast("Move the whole block"); }}
-                                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'block' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white'}`}
+                                  onClick={() => { setEditMode('block'); showToast("🎯 Move Whole Block"); }}
+                                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'block' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white'}`}
                                 >
                                   <MousePointer2 size={14}/> Whole Block
                                 </button>
                                 <button 
-                                  onClick={() => { setEditMode('words'); showToast("Drag individual words now"); }}
-                                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'words' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-white'}`}
+                                  onClick={() => { setEditMode('words'); showToast("✨ Scatter Words Mode"); }}
+                                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${editMode === 'words' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-white'}`}
                                 >
                                   <Grid size={14}/> Scatter Words
                                 </button>
@@ -970,7 +979,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. TEMPLATES PAGE */}
       {mode === 'templates' && (
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
            <div className="max-w-6xl mx-auto">
