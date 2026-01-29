@@ -57,28 +57,6 @@ const PRO_TEMPLATES = [
       { id: 202, text: "Most people fail because they quit too early.", image: "", duration: 3.5, theme: THEMES[4], animation: ANIMATIONS[5].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
       { id: 203, text: "Don't be most people.", image: "", duration: 2.5, theme: THEMES[4], animation: ANIMATIONS[1].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 } }
     ]
-  },
-  {
-    id: 't3',
-    name: 'Cyber Glitch',
-    description: 'Neon colors with rotation effects. High energy for tech or gaming.',
-    previewColor: 'bg-cyan-400',
-    frames: [
-      { id: 301, text: "GAME OVER?", image: "", duration: 1, theme: THEMES[6], animation: ANIMATIONS[3].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
-      { id: 302, text: "Press Start to Continue", image: "", duration: 2, theme: THEMES[6], animation: ANIMATIONS[2].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
-      { id: 303, text: "LEVEL UP NOW", image: "", duration: 2, theme: THEMES[3], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1.2, rotation: -5 } }
-    ]
-  },
-  {
-    id: 't4',
-    name: 'Bright & Bold',
-    description: 'Yellow background to grab instant attention. Good for sales.',
-    previewColor: 'bg-yellow-400',
-    frames: [
-      { id: 401, text: "ATTENTION!", image: "", duration: 1, theme: THEMES[1], animation: ANIMATIONS[2].id, align: 'center', aiVoice: false, layout: { x: 0, y: 0, scale: 1.5, rotation: 0 } },
-      { id: 402, text: "This offer ends in 24 hours.", image: "", duration: 3, theme: THEMES[1], animation: ANIMATIONS[0].id, align: 'center', aiVoice: true, layout: { x: 0, y: 0, scale: 1, rotation: 0 } },
-      { id: 403, text: "Link in Bio.", image: "", duration: 2, theme: THEMES[1], animation: ANIMATIONS[1].id, align: 'center', aiVoice: true, layout: { x: 0, y: 20, scale: 1, rotation: 0 } }
-    ]
   }
 ];
 
@@ -125,7 +103,7 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- TRANSFORMABLE TEXT COMPONENT (OPTIMIZED) ---
+// --- TRANSFORMABLE TEXT COMPONENT ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, isSelected, onSelect, onUpdateLayout, isPlaying 
 }) => {
@@ -135,8 +113,6 @@ const TransformableText = ({
   const isRotating = useRef(false);
   const isScaling = useRef(false);
 
-  // --- HANDLERS ---
-  
   const handleStart = (clientX, clientY, type) => {
     if (isPlaying) return;
     onSelect();
@@ -188,7 +164,7 @@ const TransformableText = ({
     const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
     const onTouchMove = (e) => {
         if (isDragging.current || isRotating.current || isScaling.current) {
-            // e.preventDefault(); // Handled by style touch-action: none
+            // Handled by style touch-action: none
         }
         handleMove(e.touches[0].clientX, e.touches[0].clientY);
     };
@@ -233,7 +209,6 @@ const TransformableText = ({
         {/* CONTROLS (Only visible when selected & not playing) */}
         {isSelected && !isPlaying && (
           <>
-            {/* Rotate Handle (Top) */}
             <div 
               onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'rotate'); }}
               onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'rotate'); }}
@@ -242,7 +217,6 @@ const TransformableText = ({
               <RotateCw size={14} strokeWidth={3} />
             </div>
 
-            {/* Scale Handle (Bottom Right) */}
             <div 
               onMouseDown={(e) => { e.stopPropagation(); handleStart(e.clientX, e.clientY, 'scale'); }}
               onTouchStart={(e) => { e.stopPropagation(); handleStart(e.touches[0].clientX, e.touches[0].clientY, 'scale'); }}
@@ -266,7 +240,7 @@ const TemplatePreviewModal = ({ template, onClose, onUse }) => {
     if (!template) return;
     const duration = template.frames[idx].duration * 1000;
     const timer = setTimeout(() => {
-      setIdx((prev) => (prev + 1) % template.frames.length); // Loop forever
+      setIdx((prev) => (prev + 1) % template.frames.length); 
     }, duration);
     return () => clearTimeout(timer);
   }, [idx, template]);
@@ -281,7 +255,6 @@ const TemplatePreviewModal = ({ template, onClose, onUse }) => {
       <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose}></div>
       
       <div className="relative w-full max-w-sm bg-neutral-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Header */}
         <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/20">
           <div>
             <h3 className="font-bold text-white">{template.name}</h3>
@@ -290,12 +263,9 @@ const TemplatePreviewModal = ({ template, onClose, onUse }) => {
           <button onClick={onClose} className="p-2 bg-white/10 rounded-full hover:bg-white/20"><X size={16} /></button>
         </div>
 
-        {/* Screen Preview */}
         <div className="flex-1 relative aspect-[9/16] w-full bg-black overflow-hidden">
-             {/* Background & Text */}
              <div className={`w-full h-full flex flex-col justify-center p-6 relative transition-colors duration-300 ${frame.theme.bg} ${getAlignmentClass(frame.align)}`}>
                   {frame.image && <><img src={frame.image} className="absolute inset-0 w-full h-full object-cover z-0" alt="bg"/><div className="absolute inset-0 bg-black/60 z-0"></div></>}
-                  
                   {!frame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
 
                   <div 
@@ -309,13 +279,12 @@ const TemplatePreviewModal = ({ template, onClose, onUse }) => {
                     </div>
                   </div>
              </div>
-             {/* Progress Bar */}
+             {/* Simple CSS animation for preview modal (Modal doesn't need complex engine) */}
              <div className="absolute bottom-0 left-0 w-full h-1 bg-white/20">
                 <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${((idx + 1) / template.frames.length) * 100}%` }}></div>
              </div>
         </div>
 
-        {/* Footer Actions */}
         <div className="p-4 bg-neutral-900 border-t border-white/10 grid grid-cols-2 gap-3">
            <button onClick={onClose} className="py-3 rounded-xl border border-white/10 text-gray-300 font-semibold text-sm hover:bg-white/5">Close</button>
            <button onClick={() => onUse(template)} className="py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg shadow-purple-900/20">Use Template</button>
@@ -329,7 +298,7 @@ const TemplatePreviewModal = ({ template, onClose, onUse }) => {
 
 export default function App() {
   const [frames, setFrames] = useState(INITIAL_FRAMES);
-  const [mode, setMode] = useState('simple'); // 'simple' | 'custom' | 'templates'
+  const [mode, setMode] = useState('simple'); 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0); 
   const [selectedRatio, setSelectedRatio] = useState('9:16');
@@ -340,47 +309,109 @@ export default function App() {
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '' });
-  const [selectedElementId, setSelectedElementId] = useState(null); // For Text Selection
+  const [selectedElementId, setSelectedElementId] = useState(null); 
 
-  const timerRef = useRef(null);
+  // REFS FOR SMOOTH PLAYBACK
+  const requestRef = useRef();
+  const startTimeRef = useRef(0);
+  const progressBarRef = useRef(null);
   const scrollRef = useRef(null);
   const previewRef = useRef(null);
 
-  // Handlers
+  // --- PLAYBACK ENGINE (TIME BASED) ---
+  const getTotalDuration = () => frames.reduce((total, frame) => total + (frame.duration * 1000), 0);
+
+  const animate = (time) => {
+    // Calculate how much time has passed since play started
+    const elapsed = Date.now() - startTimeRef.current;
+    const totalDuration = getTotalDuration();
+
+    // 1. Update Progress Bar Directly (Super Smooth)
+    const progressPercent = Math.min((elapsed / totalDuration) * 100, 100);
+    if (progressBarRef.current) {
+        progressBarRef.current.style.width = `${progressPercent}%`;
+    }
+
+    // 2. Determine Which Frame Should Be Active
+    let accumulatedTime = 0;
+    let foundIndex = -1;
+
+    for (let i = 0; i < frames.length; i++) {
+        const frameDuration = frames[i].duration * 1000;
+        if (elapsed >= accumulatedTime && elapsed < accumulatedTime + frameDuration) {
+            foundIndex = i;
+            break;
+        }
+        accumulatedTime += frameDuration;
+    }
+
+    // 3. Handle End of Video
+    if (elapsed >= totalDuration) {
+        handleStop();
+        setCurrentFrameIndex(frames.length - 1); // Stay on last frame
+        if (progressBarRef.current) progressBarRef.current.style.width = `100%`;
+        return; 
+    }
+
+    // 4. Update State only if Frame Changed (Performance Optimization)
+    if (foundIndex !== -1 && foundIndex !== currentFrameIndex) {
+        setCurrentFrameIndex(foundIndex);
+    }
+
+    // Loop
+    requestRef.current = requestAnimationFrame(animate);
+  };
+
+  const handlePlay = () => {
+    if (frames.length === 0) return;
+    setIsPlaying(true);
+    setSelectedElementId(null);
+    
+    // Start from beginning or calculate resume (simplifying to start from 0 for smoothness)
+    setCurrentFrameIndex(0); 
+    startTimeRef.current = Date.now();
+    
+    if (mode === 'simple' && window.innerWidth < 1024 && previewRef.current) {
+      previewRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    
+    requestRef.current = requestAnimationFrame(animate);
+  };
+
+  const handleStop = () => {
+    setIsPlaying(false);
+    cancelAnimationFrame(requestRef.current);
+    // Reset bar width visually but keep current frame
+    if (progressBarRef.current) progressBarRef.current.style.width = `0%`; 
+  };
+  
+  const togglePlay = () => isPlaying ? handleStop() : handlePlay();
+
+  // --- EXISTING HANDLERS ---
   const handleAddFrame = () => {
     const newId = Date.now();
     const lastFrame = frames[frames.length - 1];
     setFrames([...frames, { 
-      id: newId, 
-      text: "", 
-      image: "", 
-      duration: 2.5,
+      id: newId, text: "", image: "", duration: 2.5,
       theme: lastFrame ? lastFrame.theme : THEMES[0],
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
-      aiVoice: false,
-      layout: { x: 0, y: 0, scale: 1, rotation: 0 } // Default Layout
+      aiVoice: false, layout: { x: 0, y: 0, scale: 1, rotation: 0 }
     }]);
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, 100);
+    setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
   };
 
   const handleUpdateFrame = (id, field, value) => {
     setFrames(frames.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
-
-  // Specifically update layout object
   const handleUpdateLayout = (id, newLayoutProps) => {
       setFrames(frames.map(f => f.id === id ? { ...f, layout: { ...f.layout, ...newLayoutProps } } : f));
   };
-
   const handleRemoveFrame = (id) => {
     if (frames.length <= 1) return;
     setFrames(frames.filter(f => f.id !== id));
     if (currentFrameIndex >= frames.length - 1) setCurrentFrameIndex(Math.max(0, frames.length - 2));
   };
-
   const handleDuplicateFrame = (id) => {
     const frameToCopy = frames.find(f => f.id === id);
     if (!frameToCopy) return;
@@ -390,7 +421,6 @@ export default function App() {
     newFrames.splice(index + 1, 0, newFrame);
     setFrames(newFrames);
   };
-
   const handleMoveFrame = (index, direction) => {
     if ((direction === -1 && index === 0) || (direction === 1 && index === frames.length - 1)) return;
     const newFrames = [...frames];
@@ -399,43 +429,12 @@ export default function App() {
     newFrames[index + direction] = temp;
     setFrames(newFrames);
   };
-
   const handleApplyTemplate = (template) => {
-    // Deep copy the template frames to avoid reference issues
     const newFrames = template.frames.map(f => ({...f, id: Date.now() + Math.random()}));
     setFrames(newFrames);
     setMode('simple'); 
     setPreviewTemplate(null);
     showToast(`Applied ${template.name} Template!`);
-  };
-
-  const handlePlay = () => {
-    if (frames.length === 0) return;
-    setIsPlaying(true);
-    setSelectedElementId(null); // Deselect when playing
-    setCurrentFrameIndex(0);
-    if (mode === 'simple' && window.innerWidth < 1024 && previewRef.current) {
-      previewRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    triggerFrame(0);
-  };
-
-  const handleStop = () => {
-    setIsPlaying(false);
-    clearTimeout(timerRef.current);
-    // Do not reset currentFrameIndex here so user can edit where they stopped
-  };
-  
-  const togglePlay = () => isPlaying ? handleStop() : handlePlay();
-
-  const triggerFrame = (index) => {
-    if (index >= frames.length) {
-      handleStop();
-      return;
-    }
-    setCurrentFrameIndex(index);
-    const duration = frames[index].duration * 1000;
-    timerRef.current = setTimeout(() => triggerFrame(index + 1), duration);
   };
 
   const handleExport = () => {
@@ -445,10 +444,7 @@ export default function App() {
       setExportProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
-          setTimeout(() => {
-             setIsExporting(false);
-             showToast("Video Saved to Gallery! 📸");
-          }, 500);
+          setTimeout(() => { setIsExporting(false); showToast("Video Saved to Gallery! 📸"); }, 500);
           return 100;
         }
         return prev + Math.floor(Math.random() * 5) + 2;
@@ -461,9 +457,8 @@ export default function App() {
     setTimeout(() => setToast({ show: false, message: '' }), 3000);
   };
 
-  useEffect(() => { return () => clearTimeout(timerRef.current); }, []);
+  useEffect(() => { return () => cancelAnimationFrame(requestRef.current); }, []);
 
-  // Ensure activeFrame is valid
   const activeFrame = frames[currentFrameIndex] || frames[0];
   const activeTheme = activeFrame?.theme || THEMES[0];
   const activeAnim = activeFrame?.animation || ANIMATIONS[0].id;
@@ -557,11 +552,9 @@ export default function App() {
           </h1>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
-            {/* Template Button in Header */}
             <button onClick={() => setMode('templates')} className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${mode === 'templates' ? 'bg-white text-black' : 'hover:bg-white/10 text-gray-300'}`}>
                 <Library className="w-3.5 h-3.5" /> Templates
             </button>
-
             <button onClick={() => setIsPricingOpen(true)} className="bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg flex items-center gap-1.5">
                <Crown className="w-3.5 h-3.5 fill-white/20" /> Pro
             </button>
@@ -650,7 +643,6 @@ export default function App() {
 
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <div className={`relative transition-all duration-500 ease-in-out bg-black rounded-[2rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col ${ASPECT_RATIOS[selectedRatio].containerClass} ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
-                  {/* Smart Container with Flex Wrapping */}
                   <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeFrame.image ? 'bg-black' : activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
                     
                     {activeFrame.image && <><img src={activeFrame.image} alt="Background" className="absolute inset-0 w-full h-full object-cover z-0" /><div className="absolute inset-0 bg-black/60 z-0"></div></>}
@@ -676,8 +668,9 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                  {/* SMOOTH PROGRESS BAR (Ref based) */}
                   <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
-                      {isPlaying && <div className="h-full bg-red-600 shadow-[0_0_10px_red] transition-all duration-300 ease-linear" style={{ width: `${((currentFrameIndex + 1) / frames.length) * 100}%` }} />}
+                      <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
                   </div>
                 </div>
               </div>
@@ -685,14 +678,13 @@ export default function App() {
         </main>
       )}
 
-      {/* 2. CUSTOM STUDIO MODE (FIXED & IMPROVED) */}
+      {/* 2. CUSTOM STUDIO MODE (FIXED) */}
       {mode === 'custom' && (
         <div className="flex-1 flex flex-col h-[calc(100vh-64px)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
            
            {/* Top Section: Preview Area */}
            <div className="flex-1 bg-[#121212] relative flex flex-col items-center justify-center p-4 min-h-0">
              
-              {/* Toolbar floating on top */}
               <div className="absolute top-4 z-40 bg-black/50 backdrop-blur-md p-1 rounded-full border border-white/10 flex gap-2">
                   <button onClick={togglePlay} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
                      {isPlaying ? <Pause size={12}/> : <Play size={12}/>} {isPlaying ? 'Stop' : 'Play'}
@@ -723,7 +715,12 @@ export default function App() {
                         isPlaying={isPlaying}
                       />
                  </div>
-                 {/* Safe Zone Indicator (Optional overlay) */}
+                 
+                 {/* SMOOTH PROGRESS BAR (Ref based) */}
+                 <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
+                    <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
+                 </div>
+
                  {!isPlaying && <div className="absolute inset-x-4 inset-y-12 border border-dashed border-white/10 rounded-lg pointer-events-none"></div>}
              </div>
              
@@ -736,7 +733,6 @@ export default function App() {
 
            {/* Bottom Section: Editor Controls */}
            <div className="h-[45vh] bg-[#0f0f0f] border-t border-white/10 flex flex-col z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-              {/* Scene Strip */}
               <div className="h-20 border-b border-white/5 flex items-center px-4 gap-3 overflow-x-auto custom-scrollbar bg-[#050505] shrink-0">
                  {frames.map((frame, idx) => (
                    <button key={frame.id} onClick={() => { setIsPlaying(false); setCurrentFrameIndex(idx); }} className={`relative h-14 min-w-[90px] rounded-lg border-2 transition-all flex items-center justify-center overflow-hidden shrink-0 group ${currentFrameIndex === idx ? 'border-purple-500 ring-2 ring-purple-500/30' : 'border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'}`}>
@@ -748,7 +744,6 @@ export default function App() {
                  <button onClick={handleAddFrame} className="h-12 w-12 rounded-full border border-dashed border-white/20 flex items-center justify-center text-gray-500 hover:text-white shrink-0 hover:bg-white/5 transition-all"><Plus size={20} /></button>
               </div>
 
-              {/* Tools Panel */}
               <div className="flex-1 flex flex-col p-2 lg:p-4 overflow-hidden">
                  <div className="flex justify-center mb-4 shrink-0">
                    <div className="flex bg-neutral-900 rounded-full p-1 border border-white/10 shadow-lg">
@@ -783,7 +778,6 @@ export default function App() {
                                rows={2}
                                placeholder="Type your script here..."
                              />
-                             
                              <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-neutral-900 p-3 rounded-xl border border-white/10 flex items-center justify-center">
                                    <div className="text-xs text-gray-400 text-center">Font Size: <span className="text-white font-bold ml-1">Auto Scale</span></div>
@@ -801,7 +795,6 @@ export default function App() {
                                    </div>
                                 </div>
                              </div>
-                             
                              <div className="flex gap-4">
                                <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 border border-white/5">Reset Position</button>
                                <button 
