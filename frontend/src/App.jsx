@@ -233,10 +233,10 @@ const TransformableText = ({
                    ${isSelected && !isPlaying && editMode === 'words' ? 'cursor-grab bg-purple-500/20 ring-1 ring-purple-400 rounded px-1 mx-1' : 'mx-1'}
                  `} 
                  style={{ 
-                    animationDelay: isPlaying ? `${i * 0.25}s` : '0s',
-                    transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
-                    display: 'inline-block',
-                    padding: isSelected && editMode === 'words' ? '4px 8px' : '0' // Larger hit area on mobile
+                   animationDelay: isPlaying ? `${i * 0.25}s` : '0s',
+                   transform: `translate(${wl.x}px, ${wl.y}px) rotate(${wl.rotation}deg)`,
+                   display: 'inline-block',
+                   padding: isSelected && editMode === 'words' ? '4px 8px' : '0' // Larger hit area on mobile
                  }}
                  onMouseDown={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
                  onTouchStart={(e) => isSelected && !isPlaying && editMode === 'words' && handleStart(e, 'word-drag', i)}
@@ -560,15 +560,15 @@ export default function App() {
       {isExporting && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
            <div className="w-64 space-y-4 text-center">
-              <div className="relative w-20 h-20 mx-auto">
+             <div className="relative w-20 h-20 mx-auto">
                  <div className="absolute inset-0 rounded-full border-4 border-white/10"></div>
                  <div className="absolute inset-0 rounded-full border-4 border-purple-500 border-t-transparent animate-spin"></div>
                  <div className="absolute inset-0 flex items-center justify-center font-bold text-sm">{exportProgress}%</div>
-              </div>
-              <div>
+             </div>
+             <div>
                  <h3 className="text-xl font-bold">Rendering Video...</h3>
                  <p className="text-gray-400 text-sm">Optimizing {frames.length} scenes</p>
-              </div>
+             </div>
            </div>
         </div>
       )}
@@ -884,7 +884,7 @@ export default function App() {
                                <button onClick={() => handleUpdateFrame(activeFrame.id, 'layout', { x: 0, y: 0, scale: 1, rotation: 0 })} className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-400 border border-white/5">Reset Block</button>
                                <button onClick={() => handleResetWordLayouts(activeFrame.id)} className="flex-1 py-2 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-xs text-purple-400 border border-purple-500/30 flex items-center justify-center gap-1"><RotateCcw size={12}/> Reset Words</button>
                              </div>
-                          </div>
+                           </div>
                       )}
 
                       {activeTab === 'anim' && (
