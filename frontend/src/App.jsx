@@ -4,7 +4,8 @@ import {
   Check, X, Zap, Share2, Music, Crown, 
   ArrowUp, ArrowDown, ImageIcon, Clock, Edit3, 
   Move, Maximize, RotateCw, Palette, Layout, Type, 
-  MousePointer2, RefreshCcw, Type as TypeIcon
+  MousePointer2, RefreshCcw, Type as TypeIcon,
+  ZoomIn, GripHorizontal
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -29,7 +30,6 @@ const ANIMATIONS = [
 ];
 
 // --- DEFAULT DATA ---
-// Added 'fontSize' to layout to allow specific text resizing
 const INITIAL_FRAMES = [
   { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60 }, wordLayouts: {} },
   { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48 }, wordLayouts: {} },
@@ -73,17 +73,15 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
 // --- TRANSFORMABLE TEXT COMPONENT (Universal Preview) ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {},
-  isPlaying
+  isPlaying, activeTool, selectedWordIndex
 }) => {
-  // Use the layout.fontSize instead of smart calculation for better user control
-  // Default to 40px if not set
   const fontSize = layout.fontSize || 40;
   const words = text.split(' ').filter(w => w.trim());
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none overflow-hidden">
       <div 
-        className={`relative p-2 w-full max-w-[90%]`}
+        className={`relative p-2 w-full max-w-[90%] transition-transform duration-75 ease-out`}
         style={{ 
             transform: `translate(${layout.x}px, ${layout.y}px) rotate(${layout.rotation}deg) scale(${layout.scale})`,
             transformOrigin: 'center center',
@@ -95,7 +93,9 @@ const TransformableText = ({
         >
           <div className={`flex flex-wrap gap-x-[0.3em] gap-y-1 w-full ${align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center'}`}>
             {words.map((word, i) => {
-                const wl = wordLayouts[i] || { x: 0, y: 0 };
+                // Get individual word layout or default
+                const wl = wordLayouts[i] || { x: 0, y: 0, scale: 1, rotation: 0 };
+                
                 return (
                     // OUTER SPAN: Handles Position (Translate)
                     <span 
@@ -106,7 +106,7 @@ const TransformableText = ({
                         display: 'inline-block' 
                       }}
                     >
-                      {/* INNER SPAN: Handles Animation & Color */}
+                      {/* INNER SPAN: Handles Scale, Rotation, Animation & Color */}
                       <span className={`
                         inline-block
                         ${isPlaying ? 'word-hidden' : ''} 
@@ -114,6 +114,7 @@ const TransformableText = ({
                         ${isPlaying ? animation : ''}
                       `}
                       style={{
+                        transform: `scale(${wl.scale || 1}) rotate(${wl.rotation || 0}deg)`,
                         animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
                         animationFillMode: 'forwards'
                       }}>
@@ -131,13 +132,13 @@ const TransformableText = ({
 
 // --- SCENE EDITOR COMPONENT ---
 const SceneEditor = ({ frame, onUpdate, onClose }) => {
-  const [activeTool, setActiveTool] = useState('move'); 
+  const [activeTool, setActiveTool] = useState('move'); // 'move' (Group) or 'word' (Individual)
   const [isDragging, setIsDragging] = useState(false);
-  const [draggingWordIndex, setDraggingWordIndex] = useState(null);
+  const [selectedWordIndex, setSelectedWordIndex] = useState(null); // Which word is currently selected
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [draggingWordIndex, setDraggingWordIndex] = useState(null);
   
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
-  
   const containerRef = useRef(null);
   
   // --- POINTER EVENTS ---
@@ -145,6 +146,9 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
     e.stopPropagation(); 
     
     if (type === 'word' && activeTool === 'word') {
+       // SELECT THE WORD FIRST
+       setSelectedWordIndex(index);
+       
        setDraggingWordIndex(index);
        const currentWordLayout = frame.wordLayouts[index] || { x: 0, y: 0 };
        setDragStart({
@@ -155,6 +159,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
        e.target.setPointerCapture(e.pointerId); 
     } 
     else if (type === 'group' && activeTool === 'move') {
+       setSelectedWordIndex(null); // Deselect word when moving group
        setDragStart({ 
          x: e.clientX - frame.layout.x, 
          y: e.clientY - frame.layout.y 
@@ -171,12 +176,16 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
     if (activeTool === 'word' && draggingWordIndex !== null) {
         let newX = e.clientX - dragStart.x;
         let newY = e.clientY - dragStart.y;
-        const newWordLayouts = { ...frame.wordLayouts, [draggingWordIndex]: { x: newX, y: newY } };
+        // Keep existing scale/rotation, update x/y
+        const existing = frame.wordLayouts[draggingWordIndex] || { scale: 1, rotation: 0 };
+        const newWordLayouts = { 
+            ...frame.wordLayouts, 
+            [draggingWordIndex]: { ...existing, x: newX, y: newY } 
+        };
         onUpdate(frame.id, 'wordLayouts', newWordLayouts);
     } else if (activeTool === 'move') {
         let newX = e.clientX - dragStart.x;
         let newY = e.clientY - dragStart.y;
-        // Increase limit to allow off-screen dragging if needed
         const LIMIT = 1000; 
         newX = Math.max(-LIMIT, Math.min(newX, LIMIT));
         newY = Math.max(-LIMIT, Math.min(newY, LIMIT));
@@ -190,8 +199,18 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
     if (e.target) e.target.releasePointerCapture(e.pointerId);
   };
 
-  const resetWordPositions = () => {
-    onUpdate(frame.id, 'wordLayouts', {});
+  // --- SPECIFIC WORD UPDATE HELPER ---
+  const updateSelectedWord = (prop, value) => {
+    if (selectedWordIndex === null) return;
+    const existing = frame.wordLayouts[selectedWordIndex] || { x: 0, y: 0, scale: 1, rotation: 0 };
+    const newVal = { ...existing, [prop]: value };
+    onUpdate(frame.id, 'wordLayouts', { ...frame.wordLayouts, [selectedWordIndex]: newVal });
+  };
+
+  const resetWord = () => {
+      if (selectedWordIndex === null) return;
+      const { [selectedWordIndex]: removed, ...rest } = frame.wordLayouts;
+      onUpdate(frame.id, 'wordLayouts', rest);
   };
 
   const togglePreview = () => {
@@ -204,17 +223,15 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
   };
 
   // Ensure default fontSize exists
-  if (!frame.layout.fontSize) {
-      frame.layout.fontSize = 40;
-  }
+  if (!frame.layout.fontSize) frame.layout.fontSize = 40;
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#0a0a0a] flex flex-col md:flex-row overflow-hidden animate-fade">
       
       {/* LEFT SIDEBAR: CONTROLS */}
-      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-white/10 bg-neutral-900/50 flex flex-col h-[45vh] md:h-full overflow-hidden order-2 md:order-1">
-        <div className="p-4 border-b border-white/10 flex items-center justify-between">
-           <h3 className="font-bold flex items-center gap-2"><Edit3 size={16} className="text-purple-500"/> Scene Editor</h3>
+      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-white/10 bg-neutral-900/50 flex flex-col h-[50vh] md:h-full overflow-hidden order-2 md:order-1 relative z-20">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40">
+           <h3 className="font-bold flex items-center gap-2 text-sm md:text-base"><Edit3 size={16} className="text-purple-500"/> Scene Editor</h3>
            <div className="flex items-center gap-2">
                <button 
                 onClick={togglePreview}
@@ -229,35 +246,118 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
         
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 pb-20">
            
+           {/* TEXT INPUT */}
            <div className="space-y-2">
              <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Type size={12}/> Text Content</label>
              <textarea 
                value={frame.text} 
                onChange={(e) => onUpdate(frame.id, 'text', e.target.value)}
                className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none"
-               rows={3}
+               rows={2}
              />
            </div>
 
-           <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-3 space-y-3">
-              <label className="text-xs text-purple-300 font-bold uppercase flex items-center gap-2"><Move size={12}/> Movement Mode</label>
+           {/* MODE SWITCHER */}
+           <div className="bg-gradient-to-br from-purple-900/20 to-black border border-purple-500/30 rounded-xl p-3 space-y-3">
+              <label className="text-xs text-purple-300 font-bold uppercase flex items-center gap-2"><Move size={12}/> Editing Mode</label>
               <div className="flex gap-2">
                  <button 
-                   onClick={() => setActiveTool('move')}
-                   className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border text-xs gap-1 transition-all ${activeTool === 'move' ? 'bg-purple-600 text-white border-purple-500' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}
+                   onClick={() => { setActiveTool('move'); setSelectedWordIndex(null); }}
+                   className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border text-xs gap-1.5 transition-all ${activeTool === 'move' ? 'bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-900/40' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}
                  >
-                    <Move size={16}/> Move Group
+                    <GripHorizontal size={18}/> Scene
                  </button>
                  <button 
                    onClick={() => setActiveTool('word')}
-                   className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border text-xs gap-1 transition-all ${activeTool === 'word' ? 'bg-purple-600 text-white border-purple-500' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}
+                   className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border text-xs gap-1.5 transition-all ${activeTool === 'word' ? 'bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-900/40' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}
                  >
-                    <MousePointer2 size={16}/> Move Words
+                    <MousePointer2 size={18}/> Word
                  </button>
               </div>
            </div>
 
-           <div className="space-y-2">
+           {/* --- DYNAMIC CONTROLS BASED ON MODE --- */}
+
+           {/* SCENE/GROUP CONTROLS */}
+           {activeTool === 'move' && (
+               <div className="space-y-4 animate-slide-up">
+                  <div className="flex items-center justify-between">
+                     <label className="text-xs text-gray-400 font-bold uppercase">Scene Controls</label>
+                     <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects All Text</span>
+                  </div>
+
+                  {/* ALIGNMENT */}
+                  <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
+                    {['left', 'center', 'right'].map(align => (
+                        <button key={align} onClick={() => onUpdate(frame.id, 'align', align)} className={`flex-1 py-1 text-xs rounded capitalize ${frame.align === align ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                            {align}
+                        </button>
+                    ))}
+                  </div>
+
+                  {/* FONT SIZE */}
+                  <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-gray-400"><span>Font Size</span> <span>{frame.layout.fontSize}px</span></div>
+                      <input type="range" min="20" max="200" step="2" value={frame.layout.fontSize} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, fontSize: parseInt(e.target.value)})} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"/>
+                  </div>
+                  {/* SCALE */}
+                  <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-gray-400"><span>Scale</span> <span>{frame.layout.scale}x</span></div>
+                      <input type="range" min="0.1" max="3" step="0.1" value={frame.layout.scale} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, scale: parseFloat(e.target.value)})} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"/>
+                  </div>
+                  {/* ROTATION */}
+                  <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-gray-400"><span>Rotation</span> <span>{frame.layout.rotation}°</span></div>
+                      <input type="range" min="-180" max="180" step="5" value={frame.layout.rotation} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, rotation: parseInt(e.target.value)})} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"/>
+                  </div>
+               </div>
+           )}
+
+           {/* INDIVIDUAL WORD CONTROLS */}
+           {activeTool === 'word' && (
+               <div className="space-y-4 animate-slide-up">
+                  <div className="flex items-center justify-between">
+                     <label className="text-xs text-gray-400 font-bold uppercase">Word Controls</label>
+                     <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects Selected Word</span>
+                  </div>
+
+                  {selectedWordIndex === null ? (
+                      <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 text-xs text-center">
+                          👆 Tap a word on the preview to select and resize it.
+                      </div>
+                  ) : (
+                      <div className="bg-gray-900/50 p-3 rounded-xl border border-white/10 space-y-4">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                             <span className="text-xs font-bold text-white">Selected: "{frame.text.split(' ').filter(w=>w.trim())[selectedWordIndex]}"</span>
+                             <button onClick={resetWord} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"><RefreshCcw size={10}/> Reset</button>
+                          </div>
+                          
+                          {/* WORD SCALE */}
+                          <div className="space-y-1">
+                              <div className="flex justify-between text-xs text-gray-400"><span>Size (Scale)</span> <span>{(frame.wordLayouts[selectedWordIndex]?.scale || 1).toFixed(1)}x</span></div>
+                              <input 
+                                type="range" min="0.5" max="4" step="0.1" 
+                                value={frame.wordLayouts[selectedWordIndex]?.scale || 1} 
+                                onChange={(e) => updateSelectedWord('scale', parseFloat(e.target.value))} 
+                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-green-500"
+                              />
+                          </div>
+                          {/* WORD ROTATION */}
+                          <div className="space-y-1">
+                              <div className="flex justify-between text-xs text-gray-400"><span>Rotation</span> <span>{frame.wordLayouts[selectedWordIndex]?.rotation || 0}°</span></div>
+                              <input 
+                                type="range" min="-180" max="180" step="5" 
+                                value={frame.wordLayouts[selectedWordIndex]?.rotation || 0} 
+                                onChange={(e) => updateSelectedWord('rotation', parseInt(e.target.value))} 
+                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-green-500"
+                              />
+                          </div>
+                      </div>
+                  )}
+               </div>
+           )}
+
+           <div className="space-y-2 pt-2 border-t border-white/5">
              <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Palette size={12}/> Theme</label>
              <div className="grid grid-cols-4 gap-2">
                {THEMES.map(t => (
@@ -271,7 +371,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
            </div>
 
            <div className="space-y-2">
-             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Zap size={12}/> Animation Style</label>
+             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Zap size={12}/> Animation</label>
              <select 
                 value={frame.animation} 
                 onChange={(e) => onUpdate(frame.id, 'animation', e.target.value)}
@@ -280,76 +380,24 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                {ANIMATIONS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
              </select>
            </div>
-
-            <div className="space-y-4 pt-4 border-t border-white/5">
-              <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Layout size={12}/> Transform & Align</label>
-              
-              <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
-                {['left', 'center', 'right'].map(align => (
-                    <button 
-                        key={align}
-                        onClick={() => onUpdate(frame.id, 'align', align)}
-                        className={`flex-1 py-1 text-xs rounded capitalize ${frame.align === align ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        {align}
-                    </button>
-                ))}
-              </div>
-
-              {/* FONT SIZE SLIDER */}
-              <div className="flex items-center gap-3">
-                 <TypeIcon size={14} className="text-gray-500"/>
-                 <input 
-                   type="range" min="10" max="150" step="2" 
-                   value={frame.layout.fontSize}
-                   onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, fontSize: parseInt(e.target.value)})}
-                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"
-                 />
-                 <span className="text-xs font-mono w-8 text-right">{frame.layout.fontSize}px</span>
-              </div>
-
-              {/* SCALE SLIDER */}
-              <div className="flex items-center gap-3">
-                 <Maximize size={14} className="text-gray-500"/>
-                 <input 
-                   type="range" min="0.1" max="3" step="0.1" 
-                   value={frame.layout.scale}
-                   onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, scale: parseFloat(e.target.value)})}
-                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"
-                 />
-                 <span className="text-xs font-mono w-8 text-right">{frame.layout.scale}x</span>
-              </div>
-
-              {/* ROTATION SLIDER */}
-              <div className="flex items-center gap-3">
-                 <RotateCw size={14} className="text-gray-500"/>
-                 <input 
-                   type="range" min="-45" max="45" step="5" 
-                   value={frame.layout.rotation}
-                   onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, rotation: parseInt(e.target.value)})}
-                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"
-                 />
-                 <span className="text-xs font-mono w-8 text-right">{frame.layout.rotation}°</span>
-              </div>
-            </div>
         </div>
       </div>
 
       {/* CENTER: CANVAS */}
       <div 
-        className="flex-1 bg-neutral-950 flex flex-col relative order-1 md:order-2 h-[55vh] md:h-full" 
+        className="flex-1 bg-neutral-950 flex flex-col relative order-1 md:order-2 h-[50vh] md:h-full" 
         onPointerMove={handlePointerMove} 
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 z-50 pointer-events-none">
-           <span className="text-xs text-gray-400 flex items-center gap-2">
-             {activeTool === 'move' ? <><Move size={12}/> Drag text group</> : <><MousePointer2 size={12}/> Drag words</>}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 z-50 pointer-events-none">
+           <span className="text-xs text-white font-medium flex items-center gap-2">
+             {activeTool === 'move' ? <><Move size={14} className="text-purple-400"/> Drag to move Scene</> : <><MousePointer2 size={14} className="text-green-400"/> Tap word to Resize</>}
            </span>
         </div>
 
         <div className="flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden">
-          {/* ENFORCED ASPECT RATIO CONTAINER TO MATCH MAIN PREVIEW */}
+          {/* ENFORCED ASPECT RATIO CONTAINER */}
           <div ref={containerRef} className="aspect-video w-full max-w-[1000px] border border-white/10 bg-black relative shadow-2xl overflow-hidden group touch-none">
               
               {/* Background */}
@@ -384,42 +432,50 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                     className={`${frame.theme.text} drop-shadow-xl font-black ${getAlignmentClass(frame.align)} select-none`}
                     style={{ fontSize: `${frame.layout.fontSize || 40}px`, lineHeight: 1.2 }}
                   >
-                      <div className={`flex flex-wrap gap-x-[0.3em] gap-y-1 ${frame.align === 'left' ? 'justify-start' : frame.align === 'right' ? 'justify-end' : 'justify-center'}`}>
-                        
-                        {frame.text.split(' ').filter(w => w.trim()).map((word, i) => {
-                            const wl = frame.wordLayouts[i] || { x: 0, y: 0 };
-                            return (
-                                // OUTER SPAN: Handles Position & Drag Events
-                                <span 
-                                    key={i} 
-                                    onPointerDown={(e) => handlePointerDown(e, 'word', i)}
-                                    className={`
-                                        inline-block relative 
-                                        ${activeTool === 'word' && !isPreviewPlaying ? 'cursor-grab hover:scale-110 active:cursor-grabbing' : ''}
-                                    `}
-                                    style={{ 
-                                        transform: `translate(${wl.x}px, ${wl.y}px)`,
-                                        touchAction: 'none'
-                                    }}
-                                >
-                                    {/* INNER SPAN: Handles Animation & Styling */}
-                                    <span className={`
-                                        inline-block
-                                        ${i % 2 !== 0 ? frame.theme.accent : ''}
-                                        ${activeTool === 'word' && !isPreviewPlaying ? 'hover:text-purple-400' : ''}
-                                        ${isPreviewPlaying ? 'word-hidden' : ''} 
-                                        ${isPreviewPlaying ? frame.animation : ''}
-                                    `}
-                                    style={{
-                                        animationDelay: isPreviewPlaying ? `${i * 0.15}s` : '0s',
-                                        animationFillMode: 'forwards'
-                                    }}>
-                                        {word}
-                                    </span>
-                                </span>
-                            );
-                        })}
-                      </div>
+                    <div className={`flex flex-wrap gap-x-[0.3em] gap-y-1 ${frame.align === 'left' ? 'justify-start' : frame.align === 'right' ? 'justify-end' : 'justify-center'}`}>
+                      
+                      {frame.text.split(' ').filter(w => w.trim()).map((word, i) => {
+                          const wl = frame.wordLayouts[i] || { x: 0, y: 0, scale: 1, rotation: 0 };
+                          const isSelected = activeTool === 'word' && selectedWordIndex === i;
+                          
+                          return (
+                              // OUTER SPAN: Handles Position & Drag Events
+                              <span 
+                                  key={i} 
+                                  onPointerDown={(e) => handlePointerDown(e, 'word', i)}
+                                  className={`
+                                      inline-block relative transition-all
+                                      ${activeTool === 'word' && !isPreviewPlaying ? 'cursor-pointer hover:scale-105' : ''}
+                                      ${isSelected ? 'z-50' : 'z-auto'}
+                                  `}
+                                  style={{ 
+                                      transform: `translate(${wl.x}px, ${wl.y}px)`,
+                                      touchAction: 'none'
+                                  }}
+                              >
+                                  {/* SELECTION BOX (Visible only when selecting words) */}
+                                  {isSelected && (
+                                      <span className="absolute -inset-2 border-2 border-green-400 bg-green-400/20 rounded animate-pulse pointer-events-none z-0"></span>
+                                  )}
+
+                                  {/* INNER SPAN: Handles Animation, Scale, Rotation */}
+                                  <span className={`
+                                      inline-block relative z-10
+                                      ${i % 2 !== 0 ? frame.theme.accent : ''}
+                                      ${isPreviewPlaying ? 'word-hidden' : ''} 
+                                      ${isPreviewPlaying ? frame.animation : ''}
+                                  `}
+                                  style={{
+                                      transform: `scale(${wl.scale || 1}) rotate(${wl.rotation || 0}deg)`,
+                                      animationDelay: isPreviewPlaying ? `${i * 0.15}s` : '0s',
+                                      animationFillMode: 'forwards'
+                                  }}>
+                                      {word}
+                                  </span>
+                              </span>
+                          );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -742,6 +798,9 @@ export default function App() {
                       layout={activeFrame.layout}
                       wordLayouts={activeFrame.wordLayouts}
                       isPlaying={isPlaying}
+                      // Pass dummy props for preview only (non-editable)
+                      activeTool={null} 
+                      selectedWordIndex={null}
                     />
                   </div>
                   <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
