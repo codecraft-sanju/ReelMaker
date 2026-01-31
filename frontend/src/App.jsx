@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Play, Pause, Plus, Trash2, Video, Monitor, 
+  Play, Pause, Plus, Trash2, Video, 
   Check, X, Zap, Share2, Music, Crown, 
   ArrowUp, ArrowDown, ImageIcon, Clock, Edit3, 
-  Move, Maximize, RotateCw, Palette, Layout, Type, Grid,
-  MousePointer2, RefreshCcw, Smartphone
+  Move, Maximize, RotateCw, Palette, Layout, Type, 
+  MousePointer2, RefreshCcw, Type as TypeIcon
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -29,21 +29,14 @@ const ANIMATIONS = [
 ];
 
 // --- DEFAULT DATA ---
+// Added 'fontSize' to layout to allow specific text resizing
 const INITIAL_FRAMES = [
-  { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
-  { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0 }, wordLayouts: {} },
-  { id: 103, text: "BUILD IT YOURSELF.", image: "", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1.5, rotation: 0 }, wordLayouts: {} }
+  { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60 }, wordLayouts: {} },
+  { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48 }, wordLayouts: {} },
+  { id: 103, text: "BUILD IT YOURSELF.", image: "", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72 }, wordLayouts: {} }
 ];
 
 // --- 2. HELPER FUNCTIONS ---
-
-const getSmartFontSize = (textLength) => {
-  if (textLength < 10) return 'text-6xl lg:text-8xl leading-tight font-black'; 
-  if (textLength < 30) return 'text-4xl lg:text-6xl leading-snug font-bold';  
-  if (textLength < 60) return 'text-2xl lg:text-4xl leading-normal font-bold'; 
-  if (textLength < 100) return 'text-xl lg:text-3xl leading-relaxed font-bold'; 
-  return 'text-lg lg:text-2xl leading-relaxed font-medium'; 
-};
 
 const getAlignmentClass = (align) => {
   if (align === 'left') return 'text-left justify-start';
@@ -78,12 +71,13 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
 );
 
 // --- TRANSFORMABLE TEXT COMPONENT (Universal Preview) ---
-// FIX APPLIED: Separated Position wrapper from Animation wrapper
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {},
   isPlaying
 }) => {
-  const smartSize = getSmartFontSize(text.length);
+  // Use the layout.fontSize instead of smart calculation for better user control
+  // Default to 40px if not set
+  const fontSize = layout.fontSize || 40;
   const words = text.split(' ').filter(w => w.trim());
 
   return (
@@ -95,8 +89,11 @@ const TransformableText = ({
             transformOrigin: 'center center',
         }}
       >
-        <div className={`${theme.text} drop-shadow-2xl ${smartSize} ${getAlignmentClass(align)} select-none`}>
-          <div className={`flex flex-wrap gap-x-3 gap-y-1 w-full ${align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center'}`}>
+        <div 
+            className={`${theme.text} drop-shadow-2xl font-black ${getAlignmentClass(align)} select-none`}
+            style={{ fontSize: `${fontSize}px`, lineHeight: 1.2 }}
+        >
+          <div className={`flex flex-wrap gap-x-[0.3em] gap-y-1 w-full ${align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center'}`}>
             {words.map((word, i) => {
                 const wl = wordLayouts[i] || { x: 0, y: 0 };
                 return (
@@ -106,7 +103,7 @@ const TransformableText = ({
                       className="inline-block relative break-words"
                       style={{ 
                         transform: `translate(${wl.x}px, ${wl.y}px)`,
-                        display: 'inline-block' // Ensure transform works
+                        display: 'inline-block' 
                       }}
                     >
                       {/* INNER SPAN: Handles Animation & Color */}
@@ -132,22 +129,20 @@ const TransformableText = ({
   );
 };
 
-// --- SCENE EDITOR COMPONENT (Enhanced for Mobile & Preview) ---
+// --- SCENE EDITOR COMPONENT ---
 const SceneEditor = ({ frame, onUpdate, onClose }) => {
   const [activeTool, setActiveTool] = useState('move'); 
   const [isDragging, setIsDragging] = useState(false);
   const [draggingWordIndex, setDraggingWordIndex] = useState(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
-  // NEW: Local Preview State
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   
   const containerRef = useRef(null);
   
-  // --- POINTER EVENTS (Works for both Mouse and Touch) ---
+  // --- POINTER EVENTS ---
   const handlePointerDown = (e, type, index = null) => {
     e.stopPropagation(); 
-    // If dragging from a word, we need to stop bubbling so we don't drag group
     
     if (type === 'word' && activeTool === 'word') {
        setDraggingWordIndex(index);
@@ -157,7 +152,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
          y: e.clientY - currentWordLayout.y
        });
        setIsDragging(true);
-       e.target.setPointerCapture(e.pointerId); // Key for touch dragging stability
+       e.target.setPointerCapture(e.pointerId); 
     } 
     else if (type === 'group' && activeTool === 'move') {
        setDragStart({ 
@@ -181,7 +176,8 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
     } else if (activeTool === 'move') {
         let newX = e.clientX - dragStart.x;
         let newY = e.clientY - dragStart.y;
-        const LIMIT = 450; 
+        // Increase limit to allow off-screen dragging if needed
+        const LIMIT = 1000; 
         newX = Math.max(-LIMIT, Math.min(newX, LIMIT));
         newY = Math.max(-LIMIT, Math.min(newY, LIMIT));
         onUpdate(frame.id, 'layout', { ...frame.layout, x: newX, y: newY });
@@ -203,21 +199,23 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
           setIsPreviewPlaying(false);
       } else {
           setIsPreviewPlaying(true);
-          // Auto stop after duration + buffer
           setTimeout(() => setIsPreviewPlaying(false), (frame.duration * 1000) + 1000);
       }
   };
+
+  // Ensure default fontSize exists
+  if (!frame.layout.fontSize) {
+      frame.layout.fontSize = 40;
+  }
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#0a0a0a] flex flex-col md:flex-row overflow-hidden animate-fade">
       
       {/* LEFT SIDEBAR: CONTROLS */}
-      {/* Changed height logic for mobile to allow canvas to be visible */}
       <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-white/10 bg-neutral-900/50 flex flex-col h-[45vh] md:h-full overflow-hidden order-2 md:order-1">
         <div className="p-4 border-b border-white/10 flex items-center justify-between">
            <h3 className="font-bold flex items-center gap-2"><Edit3 size={16} className="text-purple-500"/> Scene Editor</h3>
            <div className="flex items-center gap-2">
-               {/* NEW: PREVIEW BUTTON IN HEADER FOR EASY ACCESS */}
                <button 
                 onClick={togglePreview}
                 className={`p-1.5 px-3 rounded-full text-xs font-bold flex items-center gap-1 transition-all ${isPreviewPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}
@@ -257,14 +255,6 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                     <MousePointer2 size={16}/> Move Words
                  </button>
               </div>
-              {activeTool === 'word' && (
-                  <div className="text-[10px] text-gray-400 text-center leading-tight">
-                    Drag words on screen.
-                    <button onClick={resetWordPositions} className="mt-2 w-full py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 flex items-center justify-center gap-2">
-                        <RefreshCcw size={10}/> Reset Words
-                    </button>
-                  </div>
-              )}
            </div>
 
            <div className="space-y-2">
@@ -306,10 +296,23 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                 ))}
               </div>
 
+              {/* FONT SIZE SLIDER */}
+              <div className="flex items-center gap-3">
+                 <TypeIcon size={14} className="text-gray-500"/>
+                 <input 
+                   type="range" min="10" max="150" step="2" 
+                   value={frame.layout.fontSize}
+                   onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, fontSize: parseInt(e.target.value)})}
+                   className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"
+                 />
+                 <span className="text-xs font-mono w-8 text-right">{frame.layout.fontSize}px</span>
+              </div>
+
+              {/* SCALE SLIDER */}
               <div className="flex items-center gap-3">
                  <Maximize size={14} className="text-gray-500"/>
                  <input 
-                   type="range" min="0.5" max="2.5" step="0.1" 
+                   type="range" min="0.1" max="3" step="0.1" 
                    value={frame.layout.scale}
                    onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, scale: parseFloat(e.target.value)})}
                    className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"
@@ -317,6 +320,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                  <span className="text-xs font-mono w-8 text-right">{frame.layout.scale}x</span>
               </div>
 
+              {/* ROTATION SLIDER */}
               <div className="flex items-center gap-3">
                  <RotateCw size={14} className="text-gray-500"/>
                  <input 
@@ -345,6 +349,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
         </div>
 
         <div className="flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden">
+          {/* ENFORCED ASPECT RATIO CONTAINER TO MATCH MAIN PREVIEW */}
           <div ref={containerRef} className="aspect-video w-full max-w-[1000px] border border-white/10 bg-black relative shadow-2xl overflow-hidden group touch-none">
               
               {/* Background */}
@@ -362,7 +367,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                  </div>
               </div>
 
-              {/* Interactive Layer with Preview Logic (FIXED FOR DRAGGING + ANIMATION) */}
+              {/* Interactive Layer */}
               <div className="absolute inset-0 z-30 flex items-center justify-center">
                 <div 
                    onPointerDown={(e) => handlePointerDown(e, 'group')}
@@ -375,8 +380,11 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                        ${activeTool === 'move' && !isPreviewPlaying ? 'cursor-move border-2 border-purple-500 bg-purple-500/10 rounded-lg' : 'border-2 border-dashed border-transparent'}
                    `}
                 >
-                  <div className={`${frame.theme.text} drop-shadow-xl ${getSmartFontSize(frame.text.length)} ${getAlignmentClass(frame.align)} select-none`}>
-                      <div className={`flex flex-wrap gap-x-3 gap-y-1 ${frame.align === 'left' ? 'justify-start' : frame.align === 'right' ? 'justify-end' : 'justify-center'}`}>
+                  <div 
+                    className={`${frame.theme.text} drop-shadow-xl font-black ${getAlignmentClass(frame.align)} select-none`}
+                    style={{ fontSize: `${frame.layout.fontSize || 40}px`, lineHeight: 1.2 }}
+                  >
+                      <div className={`flex flex-wrap gap-x-[0.3em] gap-y-1 ${frame.align === 'left' ? 'justify-start' : frame.align === 'right' ? 'justify-end' : 'justify-center'}`}>
                         
                         {frame.text.split(' ').filter(w => w.trim()).map((word, i) => {
                             const wl = frame.wordLayouts[i] || { x: 0, y: 0 };
@@ -508,7 +516,7 @@ export default function App() {
       theme: lastFrame ? lastFrame.theme : THEMES[0],
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
-      layout: { x: 0, y: 0, scale: 1, rotation: 0 },
+      layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 40 },
       wordLayouts: {}
     }]);
     setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
