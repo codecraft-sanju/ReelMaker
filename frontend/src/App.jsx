@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Pause, Plus, Trash2, Video, 
   Check, X, Zap, Share2, Music, Crown, 
-  ArrowUp, ArrowDown, ImageIcon, Clock, Edit3, 
+  ArrowUp, ArrowDown, Clock, Edit3, 
   Move, Palette, Type, 
   MousePointer2, RefreshCcw,
   GripHorizontal, CircleDashed
@@ -34,11 +34,21 @@ const PRESET_COLORS = [
     '#22C55E', '#3B82F6', '#A855F7', '#EC4899'
 ];
 
+// New Font List
+const FONTS = [
+  { name: 'Default', family: 'inherit' },
+  { name: 'Impact', family: '"Anton", sans-serif' },
+  { name: 'Hand', family: '"Pacifico", cursive' },
+  { name: 'Serif', family: '"Playfair Display", serif' },
+  { name: 'Mono', family: '"Courier Prime", monospace' },
+  { name: 'Comic', family: '"Bangers", system-ui' },
+];
+
 // --- DEFAULT DATA ---
 const INITIAL_FRAMES = [
-  { id: 101, text: "Stop Waiting.", image: "", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60 }, wordLayouts: {} },
-  { id: 102, text: "No one is coming to save you.", image: "", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48 }, wordLayouts: {} },
-  { id: 103, text: "BUILD IT YOURSELF.", image: "", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72 }, wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0 } } }
+  { id: 101, text: "Stop Waiting.", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60 }, wordLayouts: {} },
+  { id: 102, text: "No one is coming to save you.", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48 }, wordLayouts: {} },
+  { id: 103, text: "BUILD IT YOURSELF.", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72 }, wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0, font: '"Anton", sans-serif' } } }
 ];
 
 // --- 2. HELPER FUNCTIONS ---
@@ -98,10 +108,13 @@ const TransformableText = ({
         >
           <div className={`flex flex-wrap gap-x-[0.3em] gap-y-1 w-full ${align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center'}`}>
             {words.map((word, i) => {
-                const wl = wordLayouts[i] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0 };
+                const wl = wordLayouts[i] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0, font: null };
                 const isSelected = activeTool === 'word' && selectedWordIndex === i;
                 const themeClass = i % 2 !== 0 ? theme.accent : theme.text;
                 const wordCurve = wl.curve || 0;
+                
+                // --- FONT LOGIC HERE ---
+                const fontFamily = wl.font || 'inherit';
 
                 return (
                     <span 
@@ -131,6 +144,7 @@ const TransformableText = ({
                           `}
                           style={{
                             color: wl.color ? wl.color : undefined,
+                            fontFamily: fontFamily, // APPLY FONT HERE
                             animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
                             animationFillMode: 'forwards'
                           }}>
@@ -226,7 +240,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
 
   const updateSelectedWord = (prop, value) => {
     if (selectedWordIndex === null) return;
-    const existing = frame.wordLayouts[selectedWordIndex] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0 };
+    const existing = frame.wordLayouts[selectedWordIndex] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0, font: null };
     const newVal = { ...existing, [prop]: value };
     onUpdate(frame.id, 'wordLayouts', { ...frame.wordLayouts, [selectedWordIndex]: newVal });
   };
@@ -291,8 +305,8 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
            {activeTool === 'move' && (
                <div className="space-y-4 animate-slide-up">
                   <div className="flex items-center justify-between">
-                     <label className="text-xs text-gray-400 font-bold uppercase">Scene Controls</label>
-                     <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects All Text</span>
+                      <label className="text-xs text-gray-400 font-bold uppercase">Scene Controls</label>
+                      <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects All Text</span>
                   </div>
                   <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
                     {['left', 'center', 'right'].map(align => (
@@ -317,13 +331,13 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
            {activeTool === 'word' && (
                <div className="space-y-4 animate-slide-up">
                   <div className="flex items-center justify-between">
-                     <label className="text-xs text-gray-400 font-bold uppercase">Word Controls</label>
-                     <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects Selected Word</span>
+                      <label className="text-xs text-gray-400 font-bold uppercase">Word Controls</label>
+                      <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects Selected Word</span>
                   </div>
 
                   {selectedWordIndex === null ? (
                       <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 text-xs text-center">
-                          👆 Tap a word on the preview to select, color and resize it.
+                          👆 Tap a word on the preview to select, color, resize and change font.
                       </div>
                   ) : (
                       <div className="bg-gray-900/50 p-3 rounded-xl border border-white/10 space-y-4">
@@ -332,7 +346,26 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                              <button onClick={resetWord} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"><RefreshCcw size={10}/> Reset</button>
                           </div>
                           
-                          {/* NEW: WORD CURVE SLIDER */}
+                          {/* FONT SELECTOR - NEW */}
+                          <div className="space-y-2">
+                             <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1"><Type size={10}/> Font Family</label>
+                             <div className="grid grid-cols-2 gap-2">
+                                {FONTS.map(font => (
+                                    <button 
+                                        key={font.name}
+                                        onClick={() => updateSelectedWord('font', font.family)}
+                                        className={`px-2 py-1.5 text-xs rounded border transition-all ${frame.wordLayouts[selectedWordIndex]?.font === font.family ? 'bg-purple-600 border-purple-400 text-white' : 'bg-black/20 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'}`}
+                                        style={{ fontFamily: font.family }}
+                                    >
+                                        {font.name}
+                                    </button>
+                                ))}
+                             </div>
+                          </div>
+
+                          <div className="h-px bg-white/5 my-1"></div>
+
+                          {/* WORD CURVE SLIDER */}
                           <div className="space-y-1">
                               <div className="flex justify-between text-xs text-gray-400">
                                   <span className="flex items-center gap-1 text-yellow-400 font-bold"><CircleDashed size={10}/> Curve Word</span> 
@@ -344,11 +377,6 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                                 onChange={(e) => updateSelectedWord('curve', parseInt(e.target.value))} 
                                 className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-yellow-500"
                               />
-                              <div className="flex justify-between text-[8px] text-gray-600 px-1 uppercase tracking-wider">
-                                  <span>Arch (n)</span>
-                                  <span>Flat</span>
-                                  <span>Smile (u)</span>
-                              </div>
                           </div>
 
                           <div className="h-px bg-white/5 my-1"></div>
@@ -432,10 +460,10 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
 
         <div className="flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden">
           <div ref={containerRef} className="aspect-video w-full max-w-[1000px] border border-white/10 bg-black relative shadow-2xl overflow-hidden group touch-none">
-             
-             <div className={`absolute inset-0 transition-colors duration-300 ${frame.image ? 'bg-black' : frame.theme.bg}`}>
-                 {frame.image && <><img src={frame.image} alt="Background" className="absolute inset-0 w-full h-full object-cover z-0" /><div className="absolute inset-0 bg-black/60 z-0"></div></>}
-                 {!frame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
+              
+             {/* BACKGROUND RENDERING - IMAGE LOGIC REMOVED */}
+             <div className={`absolute inset-0 transition-colors duration-300 ${frame.theme.bg}`}>
+                 <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
              </div>
 
              <div className="absolute inset-0 z-0 pointer-events-none opacity-20">
@@ -559,7 +587,7 @@ export default function App() {
     const newId = Date.now();
     const lastFrame = frames[frames.length - 1];
     setFrames([...frames, { 
-      id: newId, text: "", image: "", duration: 2.5,
+      id: newId, text: "", duration: 2.5,
       theme: lastFrame ? lastFrame.theme : THEMES[0],
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
@@ -634,6 +662,8 @@ export default function App() {
       )}
 
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Courier+Prime:wght@400;700&family=Pacifico&family=Playfair+Display:wght@400;900&display=swap');
+
         @keyframes stomp { 0% { transform: scale(3); opacity: 0; } 50% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
         @keyframes slide-up { 0% { transform: translateY(40px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
         @keyframes pop-in { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
@@ -746,13 +776,10 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 pl-9">
-                    <div className="flex-1 flex items-center gap-2 bg-black/20 rounded-md px-2 py-1.5 border border-white/5 focus-within:border-gray-500">
-                      <ImageIcon className="w-3 h-3 text-gray-500" />
-                      <input type="text" placeholder="Image URL (Optional)" value={frame.image} onChange={(e) => handleUpdateFrame(frame.id, 'image', e.target.value)} className="bg-transparent border-none outline-none text-xs w-full text-gray-300" />
-                    </div>
-                    <div className="flex items-center gap-2 bg-black/20 rounded-md px-2 py-1.5 border border-white/5">
+                    {/* IMAGE INPUT REMOVED FROM HERE */}
+                    <div className="flex items-center gap-2 bg-black/20 rounded-md px-2 py-1.5 border border-white/5 w-full">
                       <Clock className="w-3 h-3 text-gray-500" />
-                      <input type="range" min="0.5" max="10" step="0.5" value={frame.duration} onChange={(e) => handleUpdateFrame(frame.id, 'duration', parseFloat(e.target.value))} className="w-16 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                      <input type="range" min="0.5" max="10" step="0.5" value={frame.duration} onChange={(e) => handleUpdateFrame(frame.id, 'duration', parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
                       <span className="text-xs font-mono text-gray-400 w-6">{frame.duration}s</span>
                     </div>
                   </div>
@@ -781,11 +808,11 @@ export default function App() {
 
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <div className={`relative transition-all duration-500 ease-in-out bg-black rounded-[1rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col aspect-video w-full max-w-[800px] ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
-                  <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeFrame.image ? 'bg-black' : activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
+                  
+                  {/* MAIN PREVIEW BACKGROUND - IMAGE LOGIC REMOVED */}
+                  <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
                     
-                    {activeFrame.image && <><img src={activeFrame.image} alt="Background" className="absolute inset-0 w-full h-full object-cover z-0" /><div className="absolute inset-0 bg-black/60 z-0"></div></>}
-                    
-                    {!activeFrame.image && <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>}
+                    <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
                     
                     <div className="absolute inset-0 z-30 flex items-center justify-center">
                         <div style={{ transform: `translate(${activeFrame.layout.x}px, ${activeFrame.layout.y}px) rotate(${activeFrame.layout.rotation}deg) scale(${activeFrame.layout.scale})` }}>
