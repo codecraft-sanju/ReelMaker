@@ -73,7 +73,7 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
 // --- TRANSFORMABLE TEXT COMPONENT (Universal Preview) ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {},
-  isPlaying, activeTool, selectedWordIndex
+  isPlaying
 }) => {
   const fontSize = layout.fontSize || 40;
   const words = text.split(' ').filter(w => w.trim());
@@ -97,7 +97,7 @@ const TransformableText = ({
                 const wl = wordLayouts[i] || { x: 0, y: 0, scale: 1, rotation: 0 };
                 
                 return (
-                    // OUTER SPAN: Handles Position (Translate)
+                    // LAYER 1: Position (Translate)
                     <span 
                       key={i}
                       className="inline-block relative break-words"
@@ -106,19 +106,26 @@ const TransformableText = ({
                         display: 'inline-block' 
                       }}
                     >
-                      {/* INNER SPAN: Handles Scale, Rotation, Animation & Color */}
-                      <span className={`
-                        inline-block
-                        ${isPlaying ? 'word-hidden' : ''} 
-                        ${i % 2 !== 0 ? theme.accent : ''} 
-                        ${isPlaying ? animation : ''}
-                      `}
-                      style={{
-                        transform: `scale(${wl.scale || 1}) rotate(${wl.rotation || 0}deg)`,
-                        animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
-                        animationFillMode: 'forwards'
-                      }}>
-                        {word}
+                      {/* LAYER 2: Manual Transform (Scale & Rotate) - Stays static during animation */}
+                      <span 
+                        style={{
+                            display: 'inline-block',
+                            transform: `scale(${wl.scale || 1}) rotate(${wl.rotation || 0}deg)`
+                        }}
+                      >
+                          {/* LAYER 3: Animation (Fade/Stomp) & Color - Animates opacity/scale inside the rotated container */}
+                          <span className={`
+                            inline-block
+                            ${isPlaying ? 'word-hidden' : ''} 
+                            ${i % 2 !== 0 ? theme.accent : ''} 
+                            ${isPlaying ? animation : ''}
+                          `}
+                          style={{
+                            animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
+                            animationFillMode: 'forwards'
+                          }}>
+                            {word}
+                          </span>
                       </span>
                     </span>
                 );
@@ -439,7 +446,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                           const isSelected = activeTool === 'word' && selectedWordIndex === i;
                           
                           return (
-                              // OUTER SPAN: Handles Position & Drag Events
+                              // LAYER 1: Position & Drag Events
                               <span 
                                   key={i} 
                                   onPointerDown={(e) => handlePointerDown(e, 'word', i)}
@@ -453,24 +460,29 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                                       touchAction: 'none'
                                   }}
                               >
-                                  {/* SELECTION BOX (Visible only when selecting words) */}
-                                  {isSelected && (
-                                      <span className="absolute -inset-2 border-2 border-green-400 bg-green-400/20 rounded animate-pulse pointer-events-none z-0"></span>
-                                  )}
-
-                                  {/* INNER SPAN: Handles Animation, Scale, Rotation */}
-                                  <span className={`
-                                      inline-block relative z-10
-                                      ${i % 2 !== 0 ? frame.theme.accent : ''}
-                                      ${isPreviewPlaying ? 'word-hidden' : ''} 
-                                      ${isPreviewPlaying ? frame.animation : ''}
-                                  `}
-                                  style={{
-                                      transform: `scale(${wl.scale || 1}) rotate(${wl.rotation || 0}deg)`,
-                                      animationDelay: isPreviewPlaying ? `${i * 0.15}s` : '0s',
-                                      animationFillMode: 'forwards'
+                                  {/* LAYER 2: Manual Transform (Scale & Rotate) */}
+                                  <span style={{
+                                      display: 'inline-block',
+                                      transform: `scale(${wl.scale || 1}) rotate(${wl.rotation || 0}deg)`
                                   }}>
-                                      {word}
+                                      {/* SELECTION BOX (Inside rotation layer so it rotates with text) */}
+                                      {isSelected && (
+                                          <span className="absolute -inset-2 border-2 border-green-400 bg-green-400/20 rounded animate-pulse pointer-events-none z-0"></span>
+                                      )}
+
+                                      {/* LAYER 3: Animation & Styling */}
+                                      <span className={`
+                                          inline-block relative z-10
+                                          ${i % 2 !== 0 ? frame.theme.accent : ''}
+                                          ${isPreviewPlaying ? 'word-hidden' : ''} 
+                                          ${isPreviewPlaying ? frame.animation : ''}
+                                      `}
+                                      style={{
+                                          animationDelay: isPreviewPlaying ? `${i * 0.15}s` : '0s',
+                                          animationFillMode: 'forwards'
+                                      }}>
+                                          {word}
+                                      </span>
                                   </span>
                               </span>
                           );
