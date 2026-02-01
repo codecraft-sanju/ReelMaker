@@ -7,7 +7,7 @@ import {
   MousePointer2, RefreshCcw,
   GripHorizontal, CircleDashed, Layers,
   Layout, Type as TypeIcon, Image as ImageIcon, Film,
-  Sparkles // <--- ADDED: Icon for Decor Tab
+  Sparkles 
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -31,7 +31,6 @@ const ANIMATIONS = [
   { id: 'animate-fade', label: 'Slow Fade' }
 ];
 
-// --- ADDED: DECORATIONS CONSTANT ---
 const DECORATIONS = [
   { id: 'none', name: 'None', type: 'none' },
   
@@ -54,10 +53,20 @@ const DECORATIONS = [
     duration: '4s',
     width: '60px'
   },
+  { 
+    id: 'robot-dance', // --- NEW ADDITION
+    name: 'Dancing Robot', 
+    type: 'image', 
+    src: './dancingrobot.gif', 
+    animation: 'animate-bounce', 
+    duration: '2s', 
+    width: '70px'
+  },
 
   // UI & Backgrounds
   { id: 'progress-top', name: 'Top Bar', type: 'ui' },
   { id: 'particles', name: 'Floating Dust', type: 'bg' },
+  { id: 'spotlight', name: 'Spotlight', type: 'bg' }, // --- NEW ADDITION
 ];
 
 const PRESET_COLORS = [
@@ -76,25 +85,25 @@ const FONTS = [
 
 const DEFAULT_SHADOW = { x: 0, y: 0, blur: 0, color: '#000000' };
 
-// --- DEFAULT DATA (Updated with decoration field) ---
+// --- DEFAULT DATA ---
 const INITIAL_FRAMES = [
   { 
     id: 101, text: "Stop Waiting.", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
     layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60, shadow: { ...DEFAULT_SHADOW, y: 4, blur: 10 } }, 
     wordLayouts: {},
-    decoration: 'none' // <--- Added Default
+    decoration: 'none' 
   },
   { 
     id: 102, text: "No one is coming to save you.", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
     layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48, shadow: DEFAULT_SHADOW }, 
     wordLayouts: {},
-    decoration: 'cat-walk' // <--- Example
+    decoration: 'cat-walk' 
   },
   { 
     id: 103, text: "BUILD IT YOURSELF.", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', 
     layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72, shadow: DEFAULT_SHADOW }, 
     wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0, font: '"Anton", sans-serif', shadow: DEFAULT_SHADOW } },
-    decoration: 'progress-top'
+    decoration: 'spotlight'
   }
 ];
 
@@ -132,7 +141,6 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- ADDED: DECORATION LAYER COMPONENT ---
 const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
   const decor = DECORATIONS.find(d => d.id === type);
   if (!decor || decor.id === 'none') return null;
@@ -176,18 +184,33 @@ const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
   if (decor.id === 'particles') {
     return (
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-         {[...Array(8)].map((_, i) => (
-             <div key={i} className="particle" style={{
-                 left: `${Math.random() * 100}%`,
-                 top: `${Math.random() * 100}%`,
-                 width: `${Math.random() * 3 + 1}px`,
-                 height: `${Math.random() * 3 + 1}px`,
-                 animationDelay: `${Math.random() * 2}s`,
-                 animationDuration: `${Math.random() * 5 + 5}s`
-             }} />
-         ))}
+          {[...Array(20)].map((_, i) => {
+             const size = Math.random() * 4 + 2; 
+             const duration = Math.random() * 10 + 10;
+             const delay = -(Math.random() * 20); 
+
+             return (
+               <div key={i} className="particle" style={{
+                   left: `${Math.random() * 100}%`,
+                   top: `${Math.random() * 100}%`,
+                   width: `${size}px`,
+                   height: `${size}px`,
+                   opacity: Math.random() * 0.5 + 0.3, 
+                   animationDelay: `${delay}s`,
+                   animationDuration: `${duration}s`,
+                   filter: Math.random() > 0.6 ? 'blur(1px)' : 'none'
+               }} />
+             );
+          })}
       </div>
     );
+  }
+
+  // 4. SPOTLIGHT (NEW)
+  if (decor.id === 'spotlight') {
+      return (
+          <div className="absolute inset-0 pointer-events-none z-10 bg-[radial-gradient(circle_at_center,transparent_15%,rgba(0,0,0,0.9)_80%)]"></div>
+      );
   }
 
   return null;
@@ -428,13 +451,13 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
       shadow: frame.layout.shadow 
   };
 
-  // Tab definitions (UPDATED)
+  // Tab definitions
   const TABS = [
       { id: 'text', icon: TypeIcon, label: 'Content' },
       { id: 'style', icon: Palette, label: 'Style' },
       { id: 'layout', icon: Layout, label: 'Layout' },
       { id: 'animate', icon: Film, label: 'Motion' },
-      { id: 'decor', icon: Sparkles, label: 'Decor' }, // <--- NEW TAB
+      { id: 'decor', icon: Sparkles, label: 'Decor' },
   ];
 
   return (
@@ -805,7 +828,7 @@ export default function App() {
       align: lastFrame ? lastFrame.align : 'center',
       layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 40, shadow: DEFAULT_SHADOW },
       wordLayouts: {},
-      decoration: 'none' // <--- Added default
+      decoration: 'none'
     }]);
     setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
   };
@@ -888,6 +911,28 @@ export default function App() {
         /* ADDED: Walk Animation */
         @keyframes walk-across { 0% { left: -15%; transform: scaleX(1); } 100% { left: 115%; transform: scaleX(1); } }
         .animate-walk { position: absolute; bottom: 0; animation: walk-across linear infinite; z-index: 20; }
+
+        /* ADDED: Robot Bounce Animation */
+        @keyframes bounce-decor { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .animate-bounce { position: absolute; bottom: 10px; right: 10%; animation: bounce-decor 2s ease-in-out infinite; z-index: 20; }
+
+        /* --- UPDATED: Floating Particles Animation (Magical Style) --- */
+        @keyframes float-dust {
+            0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+            20% { opacity: 1; }
+            50% { transform: translateY(-80px) translateX(20px) rotate(180deg); opacity: 0.6; }
+            80% { opacity: 1; }
+            100% { transform: translateY(-160px) translateX(-10px) rotate(360deg); opacity: 0; }
+        }
+
+        .particle {
+            position: absolute;
+            background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 70%); /* Glowing orb effect */
+            border-radius: 50%;
+            animation: float-dust linear infinite;
+            pointer-events: none;
+            mix-blend-mode: screen; /* Better blending with dark backgrounds */
+        }
 
         .animate-stomp { animation: stomp 0.5s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
         .animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
