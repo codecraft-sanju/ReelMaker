@@ -7,7 +7,7 @@ import {
   MousePointer2, RefreshCcw,
   GripHorizontal, CircleDashed, Layers,
   Layout, Type as TypeIcon, Image as ImageIcon, Film,
-  Sparkles 
+  Sparkles, Settings // Added Settings icon
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -41,7 +41,7 @@ const DECORATIONS = [
     type: 'image', 
     src: './cat.gif', 
     animation: 'animate-walk', 
-    duration: '6s',
+    duration: '6s', // Default for scene, overridden for global
     width: '80px' 
   },
   { 
@@ -54,7 +54,7 @@ const DECORATIONS = [
     width: '60px'
   },
   { 
-    id: 'robot-dance', // --- NEW ADDITION
+    id: 'robot-dance', 
     name: 'Dancing Robot', 
     type: 'image', 
     src: './dancingrobot.gif', 
@@ -66,7 +66,7 @@ const DECORATIONS = [
   // UI & Backgrounds
   { id: 'progress-top', name: 'Top Bar', type: 'ui' },
   { id: 'particles', name: 'Floating Dust', type: 'bg' },
-  { id: 'spotlight', name: 'Spotlight', type: 'bg' }, // --- NEW ADDITION
+  { id: 'spotlight', name: 'Spotlight', type: 'bg' },
 ];
 
 const PRESET_COLORS = [
@@ -88,21 +88,55 @@ const DEFAULT_SHADOW = { x: 0, y: 0, blur: 0, color: '#000000' };
 // --- DEFAULT DATA ---
 const INITIAL_FRAMES = [
   { 
-    id: 101, text: "Stop Waiting.", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
-    layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60, shadow: { ...DEFAULT_SHADOW, y: 4, blur: 10 } }, 
-    wordLayouts: {},
+    id: 101, 
+    text: "POV: You found the ULTIMATE tool.", 
+    duration: 3, 
+    theme: THEMES[0], // Midnight
+    animation: 'animate-blur-in', 
+    align: 'center', 
+    layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 55, shadow: { ...DEFAULT_SHADOW, y: 4, blur: 15 } }, 
+    wordLayouts: {
+      5: { color: '#FACC15', scale: 1.2, font: '"Anton", sans-serif', rotation: -5 } // Highlights "ULTIMATE"
+    },
     decoration: 'none' 
   },
   { 
-    id: 102, text: "No one is coming to save you.", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
-    layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48, shadow: DEFAULT_SHADOW }, 
-    wordLayouts: {},
-    decoration: 'cat-walk' 
+    id: 102, 
+    text: "Make your content go VIRAL", 
+    duration: 1.5, 
+    theme: THEMES[6], // Neon
+    animation: 'animate-stomp', 
+    align: 'center', 
+    layout: { x: 0, y: 0, scale: 1.1, rotation: -2, fontSize: 65, shadow: DEFAULT_SHADOW }, 
+    wordLayouts: {
+        4: { color: '#9333ea', font: '"Bangers", system-ui', scale: 1.4 } // Highlights "VIRAL"
+    },
+    decoration: 'none' 
   },
   { 
-    id: 103, text: "BUILD IT YOURSELF.", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', 
-    layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72, shadow: DEFAULT_SHADOW }, 
-    wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0, font: '"Anton", sans-serif', shadow: DEFAULT_SHADOW } },
+    id: 103, 
+    text: "Even the robot is dancing!", 
+    duration: 2.5, 
+    theme: THEMES[1], // Lemonade
+    animation: 'animate-slide-up', 
+    align: 'center', 
+    layout: { x: 0, y: -40, scale: 1, rotation: 0, fontSize: 45, shadow: DEFAULT_SHADOW }, 
+    wordLayouts: {},
+    decoration: 'none'
+  },
+  { 
+    id: 104, 
+    text: "START CREATING NOW", 
+    duration: 3, 
+    theme: THEMES[2], // Crimson
+    animation: 'animate-pop-in', 
+    align: 'center', 
+    layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 60, shadow: DEFAULT_SHADOW }, 
+    wordLayouts: { 
+        0: { curve: -20, font: '"Anton", sans-serif' }, 
+        1: { curve: -10, font: '"Anton", sans-serif' }, 
+        2: { curve: 20, font: '"Anton", sans-serif' } 
+    },
     decoration: 'spotlight'
   }
 ];
@@ -141,17 +175,22 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
+// --- MODIFIED DECORATION LAYER TO HANDLE GLOBAL DURATION ---
+const DecorationLayer = ({ type, duration, isPlaying, isGlobal = false }) => {
   const decor = DECORATIONS.find(d => d.id === type);
   if (!decor || decor.id === 'none') return null;
 
-  // 1. IMAGE MASCOTS (GIFs)
+  // 1. IMAGE MASCOTS (GIFs) - Now syncs with total duration if global
   if (decor.type === 'image') {
     return (
       <div 
         className={`absolute bottom-0 z-20 ${decor.animation}`} 
         style={{ 
-           animationDuration: decor.duration || `${frameDuration}s`,
+           // If global, duration is the full video length. If scene, it's scene length or default.
+           animationDuration: isGlobal ? `${duration}s` : (decor.duration || `${duration}s`),
+           // For global elements, we must control play state manually effectively
+           animationPlayState: isPlaying ? 'running' : 'paused',
+           animationTimingFunction: isGlobal ? 'linear' : 'ease-in-out',
            opacity: 1 
         }}
       >
@@ -173,7 +212,8 @@ const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
             className="h-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"
             style={{ 
                 width: isPlaying ? '100%' : '0%',
-                transition: isPlaying ? `width ${frameDuration}s linear` : 'none'
+                // If global, bar fills over total duration.
+                transition: isPlaying ? `width ${duration}s linear` : 'none'
             }}
         ></div>
       </div>
@@ -186,7 +226,7 @@ const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           {[...Array(20)].map((_, i) => {
              const size = Math.random() * 4 + 2; 
-             const duration = Math.random() * 10 + 10;
+             const animDuration = Math.random() * 10 + 10;
              const delay = -(Math.random() * 20); 
 
              return (
@@ -197,7 +237,7 @@ const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
                    height: `${size}px`,
                    opacity: Math.random() * 0.5 + 0.3, 
                    animationDelay: `${delay}s`,
-                   animationDuration: `${duration}s`,
+                   animationDuration: `${animDuration}s`,
                    filter: Math.random() > 0.6 ? 'blur(1px)' : 'none'
                }} />
              );
@@ -206,7 +246,7 @@ const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
     );
   }
 
-  // 4. SPOTLIGHT (NEW)
+  // 4. SPOTLIGHT
   if (decor.id === 'spotlight') {
       return (
           <div className="absolute inset-0 pointer-events-none z-10 bg-[radial-gradient(circle_at_center,transparent_15%,rgba(0,0,0,0.9)_80%)]"></div>
@@ -341,7 +381,7 @@ const ShadowControls = ({ shadow, onChange, label = "Shadow" }) => {
                 <input 
                     type="color" 
                     value={s.color} 
-                    onChange={(e) => update('color', e.target.value)}
+                    onChange={(e) => update('color', e.target.value)} 
                     className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0"
                 />
             </div>
@@ -493,10 +533,10 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                  <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
              </div>
              
-             {/* --- ADDED: DECORATION LAYER IN EDITOR PREVIEW --- */}
+             {/* DECORATION LAYER IN EDITOR PREVIEW (Local Scene Only) */}
              <DecorationLayer 
                 type={frame.decoration} 
-                frameDuration={frame.duration} 
+                duration={frame.duration} 
                 isPlaying={isPreviewPlaying} 
              />
 
@@ -578,23 +618,23 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
             {activeTab === 'style' && (
                 <div className="space-y-6 animate-fade">
                     {/* EDIT MODE TOGGLE */}
-                     <div className="bg-neutral-800/50 p-3 rounded-xl border border-white/10 flex items-center justify-between">
-                         <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${activeTool === 'word' ? 'bg-purple-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                                <MousePointer2 size={18}/>
-                            </div>
-                            <div className="text-xs">
-                                <div className="font-bold text-white">Word Editor</div>
-                                <div className="text-gray-500">Select individual words</div>
-                            </div>
-                         </div>
-                         <button 
+                      <div className="bg-neutral-800/50 p-3 rounded-xl border border-white/10 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                             <div className={`p-2 rounded-lg ${activeTool === 'word' ? 'bg-purple-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                                 <MousePointer2 size={18}/>
+                             </div>
+                             <div className="text-xs">
+                                 <div className="font-bold text-white">Word Editor</div>
+                                 <div className="text-gray-500">Select individual words</div>
+                             </div>
+                          </div>
+                          <button 
                            onClick={() => { setActiveTool(activeTool === 'move' ? 'word' : 'move'); setSelectedWordIndex(null); }}
                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTool === 'word' ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-300'}`}
-                         >
-                            {activeTool === 'word' ? 'Active' : 'Enable'}
-                         </button>
-                     </div>
+                          >
+                             {activeTool === 'word' ? 'Active' : 'Enable'}
+                          </button>
+                      </div>
                     
                     {activeTool === 'word' && selectedWordIndex !== null && (
                          <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-xl space-y-4">
@@ -633,7 +673,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                                      ))}
                                 </div>
                              </div>
-                         </div>
+                          </div>
                     )}
 
                     <div className="space-y-2">
@@ -703,7 +743,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
              {activeTab === 'decor' && (
                 <div className="space-y-6 animate-fade">
                     <div className="space-y-3">
-                        <label className="text-xs text-gray-400 font-bold uppercase">Select Decoration</label>
+                        <label className="text-xs text-gray-400 font-bold uppercase">Scene Decoration (Local)</label>
                         <div className="grid grid-cols-2 gap-3">
                             {DECORATIONS.map(d => (
                                 <button 
@@ -722,7 +762,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                         </div>
                     </div>
                     <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] text-blue-300">
-                        <strong>Tip:</strong> Mascots (Cats/Ducks) will automatically walk across the bottom of the screen when the video plays.
+                        <strong>Tip:</strong> This decoration only appears for this specific scene. To add a decoration for the <strong>entire video</strong>, use the Settings icon in the header.
                     </div>
                 </div>
             )}
@@ -745,6 +785,11 @@ export default function App() {
   const [exportProgress, setExportProgress] = useState(0);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '' });
+  const [playbackSessionId, setPlaybackSessionId] = useState(0);
+
+  // --- NEW: GLOBAL SETTINGS STATE ---
+  const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
+  const [globalDecor, setGlobalDecor] = useState('none');
 
   const requestRef = useRef();
   const startTimeRef = useRef(0);
@@ -753,6 +798,8 @@ export default function App() {
   const previewRef = useRef(null);
 
   const getTotalDuration = () => frames.reduce((total, frame) => total + (frame.duration * 1000), 0);
+  // Get Total Duration in Seconds for CSS animations
+  const totalDurationSec = frames.reduce((total, frame) => total + frame.duration, 0);
 
   const animate = (time) => {
     const elapsed = Date.now() - startTimeRef.current;
@@ -801,6 +848,7 @@ export default function App() {
 
   const handlePlay = () => {
     if (frames.length === 0) return;
+    setPlaybackSessionId(prev => prev + 1); // <--- Force a new playback session key
     setIsPlaying(true);
     setCurrentFrameIndex(0); 
     startTimeRef.current = Date.now();
@@ -909,7 +957,8 @@ export default function App() {
         @keyframes fade-in { 0% { opacity: 0; } 100% { opacity: 1; } }
         
         /* ADDED: Walk Animation */
-        @keyframes walk-across { 0% { left: -15%; transform: scaleX(1); } 100% { left: 115%; transform: scaleX(1); } }
+        /* Changed to start slightly offscreen left and end slightly offscreen right */
+        @keyframes walk-across { 0% { left: -100px; transform: scaleX(1); } 100% { left: 100%; transform: scaleX(1); } }
         .animate-walk { position: absolute; bottom: 0; animation: walk-across linear infinite; z-index: 20; }
 
         /* ADDED: Robot Bounce Animation */
@@ -981,6 +1030,44 @@ export default function App() {
         </div>
       )}
 
+       {/* ... [NEW: GLOBAL SETTINGS MODAL] ... */}
+       {isGlobalSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsGlobalSettingsOpen(false)}></div>
+          <div className="bg-[#0f0f0f] border border-white/10 w-full max-w-md rounded-3xl relative z-10 overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+              <h2 className="text-xl font-bold flex items-center gap-2"><Settings className="w-5 h-5 text-purple-500" /> Project Settings</h2>
+              <button onClick={() => setIsGlobalSettingsOpen(false)}><X className="w-6 h-6 text-gray-400" /></button>
+            </div>
+            <div className="p-6 space-y-6">
+                <div>
+                   <h3 className="text-sm font-bold text-gray-300 mb-3 uppercase tracking-wider">Global Decoration</h3>
+                   <p className="text-xs text-gray-500 mb-4">This decoration will appear across the entire video duration ({totalDurationSec}s).</p>
+                   <div className="grid grid-cols-2 gap-3">
+                      {DECORATIONS.map(d => (
+                           <button 
+                                key={d.id} 
+                                onClick={() => setGlobalDecor(d.id)}
+                                className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all h-24 ${globalDecor === d.id ? 'bg-purple-600/20 border-purple-500 text-white' : 'bg-neutral-800 border-white/5 text-gray-400 hover:bg-neutral-700'}`}
+                            >
+                                {d.type === 'image' ? (
+                                    <img src={d.src} className="h-8 w-auto object-contain" alt="" />
+                                ) : (
+                                    <div className="text-xl font-bold">{d.id === 'none' ? '🚫' : d.id === 'progress-top' ? 'Pb' : '✨'}</div>
+                                )}
+                                <span className="text-[10px] font-bold uppercase tracking-wider">{d.name}</span>
+                            </button>
+                      ))}
+                   </div>
+                </div>
+                <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-xs text-purple-300">
+                    <strong>Note:</strong> You can still add specific decorations to individual scenes in the Scene Editor. The Global Decoration will play on top of them.
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ... [TOAST] ... */}
       <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 ${toast.show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
         <div className="bg-white text-black px-6 py-3 rounded-full font-medium shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center gap-2">
@@ -998,6 +1085,10 @@ export default function App() {
             </h1>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
+            {/* Added Settings Button */}
+            <button onClick={() => setIsGlobalSettingsOpen(true)} className="p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-white/5">
+                <Settings size={20} />
+            </button>
             <button onClick={() => setIsPricingOpen(true)} className="bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg flex items-center gap-1.5">
                <Crown className="w-3.5 h-3.5 fill-white/20" /> <span className="hidden md:inline">Pro</span>
             </button>
@@ -1028,16 +1119,27 @@ export default function App() {
                         
                         <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
                         
-                        {/* --- ADDED: DECORATION LAYER IN MAIN PREVIEW --- */}
+                        {/* --- DECORATION LAYER 1: LOCAL (Per Scene) --- */}
                         <DecorationLayer 
                             type={activeFrame.decoration} 
-                            frameDuration={activeFrame.duration} 
+                            duration={activeFrame.duration} 
                             isPlaying={isPlaying} 
+                        />
+
+                        {/* --- DECORATION LAYER 2: GLOBAL (Entire Video) --- */}
+                        {/* Key Logic: We pass totalDurationSec and isGlobal=true */}
+                        <DecorationLayer 
+                             key={`global-${playbackSessionId}`} // Reset animation on play
+                             type={globalDecor}
+                             duration={totalDurationSec}
+                             isPlaying={isPlaying}
+                             isGlobal={true}
                         />
 
                         <div className="absolute inset-0 z-30 flex items-center justify-center">
                             <div style={{ transform: `translate(${activeFrame.layout.x}px, ${activeFrame.layout.y}px) rotate(${activeFrame.layout.rotation}deg) scale(${activeFrame.layout.scale})` }}>
                                 <TransformableText 
+                                  key={`${activeFrame.id}-${playbackSessionId}`} // <--- CRITICAL FIX: Ensures animation plays on EVERY frame change, especially the last one
                                   text={activeFrame.text} theme={activeTheme} animation={activeAnim} align={activeFrame.align}
                                   layout={activeInnerLayout} wordLayouts={activeFrame.wordLayouts} isPlaying={isPlaying}
                                   activeTool={null} selectedWordIndex={null}
