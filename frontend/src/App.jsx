@@ -5,7 +5,9 @@ import {
   ArrowUp, ArrowDown, Clock, Edit3, 
   Move, Palette, Type, 
   MousePointer2, RefreshCcw,
-  GripHorizontal, CircleDashed, Layers
+  GripHorizontal, CircleDashed, Layers,
+  Layout, Type as TypeIcon, Image as ImageIcon, Film,
+  Sparkles // <--- ADDED: Icon for Decor Tab
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -29,6 +31,35 @@ const ANIMATIONS = [
   { id: 'animate-fade', label: 'Slow Fade' }
 ];
 
+// --- ADDED: DECORATIONS CONSTANT ---
+const DECORATIONS = [
+  { id: 'none', name: 'None', type: 'none' },
+  
+  // Mascots (GIFs)
+  { 
+    id: 'cat-walk', 
+    name: 'Walking Cat', 
+    type: 'image', 
+    src: './cat.gif', 
+    animation: 'animate-walk', 
+    duration: '6s',
+    width: '80px' 
+  },
+  { 
+    id: 'duck-run', 
+    name: 'Running Duck', 
+    type: 'image', 
+    src: './duct.gif', 
+    animation: 'animate-walk', 
+    duration: '4s',
+    width: '60px'
+  },
+
+  // UI & Backgrounds
+  { id: 'progress-top', name: 'Top Bar', type: 'ui' },
+  { id: 'particles', name: 'Floating Dust', type: 'bg' },
+];
+
 const PRESET_COLORS = [
     '#FFFFFF', '#000000', '#FACC15', '#EF4444', 
     '#22C55E', '#3B82F6', '#A855F7', '#EC4899'
@@ -43,25 +74,27 @@ const FONTS = [
   { name: 'Comic', family: '"Bangers", system-ui' },
 ];
 
-// Default shadow object structure
 const DEFAULT_SHADOW = { x: 0, y: 0, blur: 0, color: '#000000' };
 
-// --- DEFAULT DATA ---
+// --- DEFAULT DATA (Updated with decoration field) ---
 const INITIAL_FRAMES = [
   { 
     id: 101, text: "Stop Waiting.", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
     layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60, shadow: { ...DEFAULT_SHADOW, y: 4, blur: 10 } }, 
-    wordLayouts: {} 
+    wordLayouts: {},
+    decoration: 'none' // <--- Added Default
   },
   { 
     id: 102, text: "No one is coming to save you.", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
     layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48, shadow: DEFAULT_SHADOW }, 
-    wordLayouts: {} 
+    wordLayouts: {},
+    decoration: 'cat-walk' // <--- Example
   },
   { 
     id: 103, text: "BUILD IT YOURSELF.", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', 
     layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72, shadow: DEFAULT_SHADOW }, 
-    wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0, font: '"Anton", sans-serif', shadow: DEFAULT_SHADOW } } 
+    wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0, font: '"Anton", sans-serif', shadow: DEFAULT_SHADOW } },
+    decoration: 'progress-top'
   }
 ];
 
@@ -99,6 +132,67 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
+// --- ADDED: DECORATION LAYER COMPONENT ---
+const DecorationLayer = ({ type, frameDuration, isPlaying }) => {
+  const decor = DECORATIONS.find(d => d.id === type);
+  if (!decor || decor.id === 'none') return null;
+
+  // 1. IMAGE MASCOTS (GIFs)
+  if (decor.type === 'image') {
+    return (
+      <div 
+        className={`absolute bottom-0 z-20 ${decor.animation}`} 
+        style={{ 
+           animationDuration: decor.duration || `${frameDuration}s`,
+           opacity: 1 
+        }}
+      >
+        <img 
+            src={decor.src} 
+            alt="mascot" 
+            style={{ width: decor.width || '60px', height: 'auto' }}
+            className="pointer-events-none select-none"
+        />
+      </div>
+    );
+  }
+
+  // 2. PROGRESS BAR
+  if (decor.id === 'progress-top') {
+    return (
+      <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/10 z-40">
+        <div 
+            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+            style={{ 
+                width: isPlaying ? '100%' : '0%',
+                transition: isPlaying ? `width ${frameDuration}s linear` : 'none'
+            }}
+        ></div>
+      </div>
+    );
+  }
+
+  // 3. PARTICLES
+  if (decor.id === 'particles') {
+    return (
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+         {[...Array(8)].map((_, i) => (
+             <div key={i} className="particle" style={{
+                 left: `${Math.random() * 100}%`,
+                 top: `${Math.random() * 100}%`,
+                 width: `${Math.random() * 3 + 1}px`,
+                 height: `${Math.random() * 3 + 1}px`,
+                 animationDelay: `${Math.random() * 2}s`,
+                 animationDuration: `${Math.random() * 5 + 5}s`
+             }} />
+         ))}
+      </div>
+    );
+  }
+
+  return null;
+};
+
 // --- TRANSFORMABLE TEXT COMPONENT ---
 const TransformableText = ({ 
   text, theme, animation, align, layout, wordLayouts = {},
@@ -107,7 +201,6 @@ const TransformableText = ({
   const fontSize = layout.fontSize || 40;
   const words = text.split(' ').filter(w => w.trim());
 
-  // Scene level shadow
   const sceneShadow = layout.shadow || DEFAULT_SHADOW;
   const sceneShadowStyle = sceneShadow.blur > 0 || sceneShadow.x !== 0 || sceneShadow.y !== 0 
     ? `${sceneShadow.x}px ${sceneShadow.y}px ${sceneShadow.blur}px ${sceneShadow.color}` 
@@ -127,7 +220,6 @@ const TransformableText = ({
             style={{ 
                 fontSize: `${fontSize}px`, 
                 lineHeight: 1.2,
-                // Apply scene shadow here so it applies to everything unless overridden
                 textShadow: sceneShadowStyle 
             }}
         >
@@ -138,14 +230,11 @@ const TransformableText = ({
                 const themeClass = i % 2 !== 0 ? theme.accent : theme.text;
                 const wordCurve = wl.curve || 0;
                 
-                // Word specific logic
                 const fontFamily = wl.font || 'inherit';
                 const wordShadow = wl.shadow; 
-                
-                // Construct shadow style for word. If word has shadow, use it, otherwise inherit scene shadow
                 const wordShadowStyle = wordShadow 
                     ? `${wordShadow.x}px ${wordShadow.y}px ${wordShadow.blur}px ${wordShadow.color}` 
-                    : undefined; // undefined allows inheritance
+                    : undefined;
 
                 return (
                     <span 
@@ -176,11 +265,10 @@ const TransformableText = ({
                           style={{
                             color: wl.color ? wl.color : undefined,
                             fontFamily: fontFamily, 
-                            textShadow: wordShadowStyle, // Apply individual shadow override
+                            textShadow: wordShadowStyle,
                             animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
                             animationFillMode: 'forwards'
                           }}>
-                            {/* CURVE RENDERING LOGIC */}
                             {wordCurve !== 0 ? (
                                 <span className="inline-block whitespace-nowrap">
                                     {word.split('').map((char, idx) => {
@@ -216,51 +304,47 @@ const TransformableText = ({
   );
 };
 
-// --- SHADOW CONTROLS COMPONENT (Reusable) ---
+// --- SHADOW CONTROLS COMPONENT ---
 const ShadowControls = ({ shadow, onChange, label = "Shadow" }) => {
     const s = shadow || DEFAULT_SHADOW;
-    
-    const update = (key, val) => {
-        onChange({ ...s, [key]: val });
-    };
+    const update = (key, val) => onChange({ ...s, [key]: val });
 
     return (
-        <div className="bg-black/20 rounded-lg p-3 space-y-3 border border-white/5">
+        <div className="bg-white/5 rounded-lg p-3 space-y-3 border border-white/5">
             <div className="flex items-center justify-between">
                 <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1">
                     <Layers size={10} className="text-blue-400"/> {label}
                 </label>
-                <div className="flex gap-2">
-                    <input 
-                        type="color" 
-                        value={s.color} 
-                        onChange={(e) => update('color', e.target.value)}
-                        className="w-4 h-4 rounded cursor-pointer bg-transparent border-none p-0"
-                    />
-                </div>
+                <input 
+                    type="color" 
+                    value={s.color} 
+                    onChange={(e) => update('color', e.target.value)}
+                    className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0"
+                />
             </div>
             
             <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-gray-500"><span>X</span> <span>{s.x}</span></div>
-                    <input type="range" min="-20" max="20" value={s.x} onChange={(e) => update('x', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
+                    <input type="range" min="-20" max="20" value={s.x} onChange={(e) => update('x', parseInt(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
                 </div>
                 <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-gray-500"><span>Y</span> <span>{s.y}</span></div>
-                    <input type="range" min="-20" max="20" value={s.y} onChange={(e) => update('y', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
+                    <input type="range" min="-20" max="20" value={s.y} onChange={(e) => update('y', parseInt(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
                 </div>
             </div>
              <div className="space-y-1">
                 <div className="flex justify-between text-[10px] text-gray-500"><span>Blur</span> <span>{s.blur}px</span></div>
-                <input type="range" min="0" max="30" value={s.blur} onChange={(e) => update('blur', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
+                <input type="range" min="0" max="30" value={s.blur} onChange={(e) => update('blur', parseInt(e.target.value))} className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
             </div>
         </div>
     );
 };
 
 
-// --- SCENE EDITOR COMPONENT ---
+// --- SCENE EDITOR COMPONENT (MOBILE OPTIMIZED) ---
 const SceneEditor = ({ frame, onUpdate, onClose }) => {
+  const [activeTab, setActiveTab] = useState('text'); // text, style, layout, animate, decor
   const [activeTool, setActiveTool] = useState('move'); 
   const [isDragging, setIsDragging] = useState(false);
   const [selectedWordIndex, setSelectedWordIndex] = useState(null);
@@ -341,259 +425,285 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
   const innerLayout = { 
       x: 0, y: 0, scale: 1, rotation: 0, 
       fontSize: frame.layout.fontSize,
-      shadow: frame.layout.shadow // pass shadow
+      shadow: frame.layout.shadow 
   };
 
+  // Tab definitions (UPDATED)
+  const TABS = [
+      { id: 'text', icon: TypeIcon, label: 'Content' },
+      { id: 'style', icon: Palette, label: 'Style' },
+      { id: 'layout', icon: Layout, label: 'Layout' },
+      { id: 'animate', icon: Film, label: 'Motion' },
+      { id: 'decor', icon: Sparkles, label: 'Decor' }, // <--- NEW TAB
+  ];
+
   return (
-    <div className="fixed inset-0 z-[200] bg-[#0a0a0a] flex flex-col md:flex-row overflow-hidden animate-fade">
+    <div className="fixed inset-0 z-[100] bg-[#000] flex flex-col md:flex-row h-[100dvh]">
       
-      {/* LEFT SIDEBAR: CONTROLS */}
-      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-white/10 bg-neutral-900/50 flex flex-col h-[50vh] md:h-full overflow-hidden order-2 md:order-1 relative z-20">
-        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/40">
-           <h3 className="font-bold flex items-center gap-2 text-sm md:text-base"><Edit3 size={16} className="text-purple-500"/> Scene Editor</h3>
-           <div className="flex items-center gap-2">
-               <button onClick={togglePreview} className={`p-1.5 px-3 rounded-full text-xs font-bold flex items-center gap-1 transition-all ${isPreviewPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
-                   {isPreviewPlaying ? <Pause size={12} fill="currentColor"/> : <Play size={12} fill="currentColor"/>} {isPreviewPlaying ? 'Stop' : 'Play'}
-               </button>
-               <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><X size={16}/></button>
-           </div>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 pb-20">
-           
-           <div className="space-y-2">
-             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Type size={12}/> Text Content</label>
-             <textarea value={frame.text} onChange={(e) => onUpdate(frame.id, 'text', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none" rows={2}/>
-           </div>
-
-           <div className="bg-gradient-to-br from-purple-900/20 to-black border border-purple-500/30 rounded-xl p-3 space-y-3">
-              <label className="text-xs text-purple-300 font-bold uppercase flex items-center gap-2"><Move size={12}/> Editing Mode</label>
-              <div className="flex gap-2">
-                 <button onClick={() => { setActiveTool('move'); setSelectedWordIndex(null); }} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border text-xs gap-1.5 transition-all ${activeTool === 'move' ? 'bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-900/40' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}>
-                    <GripHorizontal size={18}/> Scene
-                 </button>
-                 <button onClick={() => setActiveTool('word')} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border text-xs gap-1.5 transition-all ${activeTool === 'word' ? 'bg-purple-600 text-white border-purple-500 shadow-lg shadow-purple-900/40' : 'bg-black/40 text-gray-400 border-transparent hover:bg-white/5'}`}>
-                    <MousePointer2 size={18}/> Word
-                 </button>
-              </div>
-           </div>
-
-           {activeTool === 'move' && (
-               <div className="space-y-4 animate-slide-up">
-                  <div className="flex items-center justify-between">
-                      <label className="text-xs text-gray-400 font-bold uppercase">Scene Controls</label>
-                      <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects All Text</span>
-                  </div>
-                  <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
-                    {['left', 'center', 'right'].map(align => (
-                        <button key={align} onClick={() => onUpdate(frame.id, 'align', align)} className={`flex-1 py-1 text-xs rounded capitalize ${frame.align === align ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}>{align}</button>
-                    ))}
-                  </div>
-                  <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-gray-400"><span>Font Size</span> <span>{frame.layout.fontSize}px</span></div>
-                      <input type="range" min="20" max="200" step="2" value={frame.layout.fontSize} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, fontSize: parseInt(e.target.value)})} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"/>
-                  </div>
-                  <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-gray-400"><span>Scale</span> <span>{frame.layout.scale}x</span></div>
-                      <input type="range" min="0.1" max="3" step="0.1" value={frame.layout.scale} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, scale: parseFloat(e.target.value)})} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"/>
-                  </div>
-                  <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-gray-400"><span>Rotation</span> <span>{frame.layout.rotation}°</span></div>
-                      <input type="range" min="-180" max="180" step="5" value={frame.layout.rotation} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, rotation: parseInt(e.target.value)})} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"/>
-                  </div>
-
-                  {/* SCENE SHADOW CONTROLS */}
-                  <ShadowControls 
-                    label="Scene Shadow"
-                    shadow={frame.layout.shadow} 
-                    onChange={(newShadow) => onUpdate(frame.id, 'layout', { ...frame.layout, shadow: newShadow })}
-                  />
-               </div>
-           )}
-
-           {activeTool === 'word' && (
-               <div className="space-y-4 animate-slide-up">
-                  <div className="flex items-center justify-between">
-                      <label className="text-xs text-gray-400 font-bold uppercase">Word Controls</label>
-                      <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">Affects Selected Word</span>
-                  </div>
-
-                  {selectedWordIndex === null ? (
-                      <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 text-xs text-center">
-                          👆 Tap a word on the preview to select, color, resize and change font.
-                      </div>
-                  ) : (
-                      <div className="bg-gray-900/50 p-3 rounded-xl border border-white/10 space-y-4">
-                          <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                             <span className="text-xs font-bold text-white truncate max-w-[150px]">Select: "{frame.text.split(' ').filter(w=>w.trim())[selectedWordIndex]}"</span>
-                             <button onClick={resetWord} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"><RefreshCcw size={10}/> Reset</button>
-                          </div>
-                          
-                          {/* FONT SELECTOR */}
-                          <div className="space-y-2">
-                             <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1"><Type size={10}/> Font Family</label>
-                             <div className="grid grid-cols-2 gap-2">
-                                {FONTS.map(font => (
-                                    <button 
-                                        key={font.name}
-                                        onClick={() => updateSelectedWord('font', font.family)}
-                                        className={`px-2 py-1.5 text-xs rounded border transition-all ${frame.wordLayouts[selectedWordIndex]?.font === font.family ? 'bg-purple-600 border-purple-400 text-white' : 'bg-black/20 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'}`}
-                                        style={{ fontFamily: font.family }}
-                                    >
-                                        {font.name}
-                                    </button>
-                                ))}
-                             </div>
-                          </div>
-
-                          <div className="h-px bg-white/5 my-1"></div>
-
-                          {/* WORD CURVE SLIDER */}
-                          <div className="space-y-1">
-                              <div className="flex justify-between text-xs text-gray-400">
-                                  <span className="flex items-center gap-1 text-yellow-400 font-bold"><CircleDashed size={10}/> Curve Word</span> 
-                                  <span>{frame.wordLayouts[selectedWordIndex]?.curve || 0}°</span>
-                              </div>
-                              <input 
-                                type="range" min="-60" max="60" step="5" 
-                                value={frame.wordLayouts[selectedWordIndex]?.curve || 0} 
-                                onChange={(e) => updateSelectedWord('curve', parseInt(e.target.value))} 
-                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-yellow-500"
-                              />
-                          </div>
-
-                          <div className="h-px bg-white/5 my-1"></div>
-
-                          {/* WORD COLOR CONTROLS */}
-                          <div className="space-y-2">
-                             <div className="flex justify-between items-center">
-                                <label className="text-[10px] text-gray-400 font-bold uppercase">Color</label>
-                                <button onClick={() => updateSelectedWord('color', null)} className="text-[10px] text-gray-500 hover:text-white">Reset Color</button>
-                             </div>
-                             <div className="flex flex-wrap gap-2">
-                                <div className="relative w-8 h-8 rounded-full overflow-hidden border-2 border-white/20 hover:border-white transition-all">
-                                    <input 
-                                        type="color" 
-                                        value={frame.wordLayouts[selectedWordIndex]?.color || '#ffffff'} 
-                                        onChange={(e) => updateSelectedWord('color', e.target.value)}
-                                        className="absolute -top-2 -left-2 w-16 h-16 p-0 cursor-pointer"
-                                    />
-                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <Palette size={14} className="mix-blend-difference text-white"/>
-                                    </div>
-                                </div>
-                                {PRESET_COLORS.map(c => (
-                                    <button 
-                                        key={c}
-                                        onClick={() => updateSelectedWord('color', c)}
-                                        className={`w-8 h-8 rounded-full border border-white/10 hover:scale-110 transition-transform ${frame.wordLayouts[selectedWordIndex]?.color === c ? 'ring-2 ring-white scale-110' : ''}`}
-                                        style={{ backgroundColor: c }}
-                                    />
-                                ))}
-                             </div>
-                          </div>
-
-                          <div className="h-px bg-white/5 my-1"></div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1">
-                                  <div className="flex justify-between text-xs text-gray-400"><span>Size</span> <span>{(frame.wordLayouts[selectedWordIndex]?.scale || 1).toFixed(1)}x</span></div>
-                                  <input type="range" min="0.5" max="4" step="0.1" value={frame.wordLayouts[selectedWordIndex]?.scale || 1} onChange={(e) => updateSelectedWord('scale', parseFloat(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-green-500"/>
-                              </div>
-                              <div className="space-y-1">
-                                  <div className="flex justify-between text-xs text-gray-400"><span>Rotation</span> <span>{frame.wordLayouts[selectedWordIndex]?.rotation || 0}°</span></div>
-                                  <input type="range" min="-180" max="180" step="5" value={frame.wordLayouts[selectedWordIndex]?.rotation || 0} onChange={(e) => updateSelectedWord('rotation', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-green-500"/>
-                              </div>
-                          </div>
-                          
-                          <div className="h-px bg-white/5 my-1"></div>
-
-                          {/* WORD SPECIFIC SHADOW */}
-                          <ShadowControls 
-                            label="Word Shadow"
-                            shadow={frame.wordLayouts[selectedWordIndex]?.shadow} 
-                            onChange={(newShadow) => updateSelectedWord('shadow', newShadow)}
-                          />
-
-                      </div>
-                  )}
-               </div>
-           )}
-
-           <div className="space-y-2 pt-2 border-t border-white/5">
-             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Palette size={12}/> Theme</label>
-             <div className="grid grid-cols-4 gap-2">
-               {THEMES.map(t => (
-                 <button key={t.id} onClick={() => onUpdate(frame.id, 'theme', t)} className={`h-8 rounded-md border transition-all ${t.bg} ${frame.theme.id === t.id ? 'ring-2 ring-white scale-110 z-10' : 'border-white/10 opacity-60 hover:opacity-100'}`}/>
-               ))}
-             </div>
-           </div>
-
-           <div className="space-y-2">
-             <label className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2"><Zap size={12}/> Animation</label>
-             <select value={frame.animation} onChange={(e) => onUpdate(frame.id, 'animation', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-gray-300 outline-none">
-               {ANIMATIONS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-             </select>
-           </div>
-        </div>
-      </div>
-
-      {/* CENTER: CANVAS */}
+      {/* 1. TOP SECTION: PREVIEW (Fixed height on mobile to ensure visibility) */}
       <div 
-        className="flex-1 bg-neutral-950 flex flex-col relative order-1 md:order-2 h-[50vh] md:h-full" 
+        className="relative h-[45vh] md:h-full md:flex-1 bg-[#111] flex items-center justify-center overflow-hidden order-1 md:order-2 border-b md:border-b-0 md:border-l border-white/10" 
         onPointerMove={handlePointerMove} 
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 z-50 pointer-events-none">
-           <span className="text-xs text-white font-medium flex items-center gap-2">
-             {activeTool === 'move' ? <><Move size={14} className="text-purple-400"/> Drag to move Scene</> : <><MousePointer2 size={14} className="text-green-400"/> Tap word to Style</>}
-           </span>
+         {/* Top Bar inside Preview */}
+        <div className="absolute top-0 left-0 right-0 p-4 z-50 flex justify-between items-start pointer-events-none">
+             <div className="bg-black/60 backdrop-blur rounded-full px-3 py-1 text-xs font-bold text-white flex items-center gap-2 pointer-events-auto">
+                <button onClick={togglePreview} className="flex items-center gap-1.5 hover:text-purple-400">
+                    {isPreviewPlaying ? <Pause size={12}/> : <Play size={12}/>} {isPreviewPlaying ? 'Stop' : 'Play Scene'}
+                </button>
+             </div>
+             <button onClick={onClose} className="bg-red-500/90 text-white p-2 rounded-full pointer-events-auto hover:bg-red-600 shadow-lg">
+                 <Check size={18} />
+             </button>
         </div>
 
-        <div className="flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden">
-          <div ref={containerRef} className="aspect-video w-full max-w-[1000px] border border-white/10 bg-black relative shadow-2xl overflow-hidden group touch-none">
-              
+        {/* Drag Helper Label */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur rounded-full px-3 py-1 text-[10px] text-gray-300 pointer-events-none z-50">
+           {activeTool === 'move' ? 'Drag text to move' : 'Tap word to edit'}
+        </div>
+
+        {/* The Canvas */}
+        <div ref={containerRef} className="aspect-video w-full max-w-[800px] bg-black relative shadow-2xl overflow-hidden touch-none group">
              <div className={`absolute inset-0 transition-colors duration-300 ${frame.theme.bg}`}>
                  <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
              </div>
-
-             <div className="absolute inset-0 z-0 pointer-events-none opacity-20">
-                 <div className="w-full h-full grid grid-cols-3 grid-rows-3">
-                    <div className="border-r border-b border-white/10"></div><div className="border-r border-b border-white/10"></div><div className="border-b border-white/10"></div>
-                    <div className="border-r border-b border-white/10"></div><div className="border-r border-b border-white/10"></div><div className="border-b border-white/10"></div>
-                    <div className="border-r border-white/10"></div><div className="border-r border-white/10"></div><div></div>
-                 </div>
-             </div>
+             
+             {/* --- ADDED: DECORATION LAYER IN EDITOR PREVIEW --- */}
+             <DecorationLayer 
+                type={frame.decoration} 
+                frameDuration={frame.duration} 
+                isPlaying={isPreviewPlaying} 
+             />
 
              <div className="absolute inset-0 z-30 flex items-center justify-center">
                 <div 
                    onPointerDown={(e) => handlePointerDown(e, 'group')}
                    style={{ 
-                       // Wrapper handles the Group positioning
                        transform: `translate(${frame.layout.x}px, ${frame.layout.y}px) rotate(${frame.layout.rotation}deg) scale(${frame.layout.scale})`,
                        transformOrigin: 'center center',
                    }}
-                   className={`
-                       relative p-2 transition-colors w-full max-w-[90%]
-                       ${activeTool === 'move' && !isPreviewPlaying ? 'cursor-move border-2 border-purple-500 bg-purple-500/10 rounded-lg' : 'border-2 border-dashed border-transparent'}
-                   `}
+                   className={`relative p-2 transition-colors w-full max-w-[90%] ${activeTool === 'move' && !isPreviewPlaying ? 'border-2 border-purple-500/50 bg-purple-500/10 rounded-lg cursor-move' : ''}`}
                 >
                   <TransformableText 
-                      text={frame.text}
-                      theme={frame.theme}
-                      animation={frame.animation}
-                      align={frame.align}
-                      layout={innerLayout} // Pass zeroed layout so we don't apply it twice
-                      wordLayouts={frame.wordLayouts}
-                      isPlaying={isPreviewPlaying}
-                      activeTool={activeTool}
-                      selectedWordIndex={selectedWordIndex}
+                      text={frame.text} theme={frame.theme} animation={frame.animation} align={frame.align}
+                      layout={innerLayout} wordLayouts={frame.wordLayouts} isPlaying={isPreviewPlaying}
+                      activeTool={activeTool} selectedWordIndex={selectedWordIndex}
                       onWordClick={(e, i) => handlePointerDown(e, 'word', i)}
                     />
                 </div>
              </div>
-          </div>
+        </div>
+      </div>
+
+      {/* 2. BOTTOM SECTION: CONTROLS (Scrollable area + Tabs) */}
+      <div className="h-[55vh] md:h-full md:w-[400px] bg-[#0a0a0a] flex flex-col order-2 md:order-1 relative z-20 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
+        
+        {/* Tab Navigation */}
+        <div className="flex border-b border-white/10 bg-neutral-900">
+            {TABS.map(tab => {
+                const Icon = tab.icon;
+                return (
+                    <button 
+                        key={tab.id} 
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex-1 py-4 flex flex-col items-center justify-center gap-1.5 transition-colors relative ${activeTab === tab.id ? 'text-purple-400 bg-white/5' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                        <Icon size={18} />
+                        <span className="text-[10px] uppercase font-bold tracking-wider">{tab.label}</span>
+                        {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500"></div>}
+                    </button>
+                )
+            })}
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 bg-[#0a0a0a]">
+            
+            {/* --- TAB: TEXT CONTENT --- */}
+            {activeTab === 'text' && (
+                <div className="space-y-6 animate-fade">
+                    <div className="space-y-2">
+                        <label className="text-xs text-gray-400 font-bold uppercase">Scene Text</label>
+                        <textarea 
+                            value={frame.text} 
+                            onChange={(e) => onUpdate(frame.id, 'text', e.target.value)} 
+                            className="w-full bg-neutral-800 border border-white/10 rounded-xl p-4 text-base focus:border-purple-500 outline-none resize-none shadow-inner" 
+                            rows={3}
+                            placeholder="Type here..."
+                        />
+                    </div>
+                    
+                    <div className="space-y-2">
+                         <label className="text-xs text-gray-400 font-bold uppercase">Alignment</label>
+                         <div className="flex bg-neutral-800 rounded-lg p-1 border border-white/10">
+                            {['left', 'center', 'right'].map(align => (
+                                <button key={align} onClick={() => onUpdate(frame.id, 'align', align)} className={`flex-1 py-2 text-xs font-bold rounded capitalize transition-all ${frame.align === align ? 'bg-neutral-600 text-white shadow' : 'text-gray-500'}`}>{align}</button>
+                            ))}
+                        </div>
+                    </div>
+
+                     <div className="space-y-2">
+                         <div className="flex justify-between text-xs text-gray-400 font-bold uppercase"><span>Duration</span> <span className="text-purple-400">{frame.duration}s</span></div>
+                         <input type="range" min="0.5" max="10" step="0.5" value={frame.duration} onChange={(e) => onUpdate(frame.id, 'duration', parseFloat(e.target.value))} className="w-full h-2 bg-gray-800 rounded-lg appearance-none accent-purple-500"/>
+                    </div>
+                </div>
+            )}
+
+            {/* --- TAB: STYLE --- */}
+            {activeTab === 'style' && (
+                <div className="space-y-6 animate-fade">
+                    {/* EDIT MODE TOGGLE */}
+                     <div className="bg-neutral-800/50 p-3 rounded-xl border border-white/10 flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${activeTool === 'word' ? 'bg-purple-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
+                                <MousePointer2 size={18}/>
+                            </div>
+                            <div className="text-xs">
+                                <div className="font-bold text-white">Word Editor</div>
+                                <div className="text-gray-500">Select individual words</div>
+                            </div>
+                         </div>
+                         <button 
+                           onClick={() => { setActiveTool(activeTool === 'move' ? 'word' : 'move'); setSelectedWordIndex(null); }}
+                           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTool === 'word' ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-300'}`}
+                         >
+                            {activeTool === 'word' ? 'Active' : 'Enable'}
+                         </button>
+                     </div>
+                    
+                    {activeTool === 'word' && selectedWordIndex !== null && (
+                         <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-xl space-y-4">
+                             <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                                 <span className="text-xs font-bold text-purple-300">Editing: "{frame.text.split(' ').filter(w=>w.trim())[selectedWordIndex]}"</span>
+                                 <button onClick={resetWord} className="text-[10px] text-red-400 flex items-center gap-1"><RefreshCcw size={10}/> Reset</button>
+                             </div>
+                             
+                             <div className="space-y-2">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase">Word Font</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {FONTS.map(font => (
+                                        <button 
+                                            key={font.name}
+                                            onClick={() => updateSelectedWord('font', font.family)}
+                                            className={`px-2 py-2 text-xs rounded border transition-all ${frame.wordLayouts[selectedWordIndex]?.font === font.family ? 'bg-purple-600 border-purple-400 text-white' : 'bg-black/20 border-white/10 text-gray-400'}`}
+                                            style={{ fontFamily: font.family }}
+                                        >
+                                            {font.name}
+                                        </button>
+                                    ))}
+                                </div>
+                             </div>
+
+                             <div className="space-y-2">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase">Curve</label>
+                                <input type="range" min="-60" max="60" step="5" value={frame.wordLayouts[selectedWordIndex]?.curve || 0} onChange={(e) => updateSelectedWord('curve', parseInt(e.target.value))} className="w-full h-2 bg-gray-800 rounded-lg appearance-none accent-yellow-500"/>
+                             </div>
+
+                             <div className="space-y-2">
+                                <label className="text-[10px] text-gray-400 font-bold uppercase">Color</label>
+                                <div className="flex flex-wrap gap-2">
+                                     <input type="color" value={frame.wordLayouts[selectedWordIndex]?.color || '#ffffff'} onChange={(e) => updateSelectedWord('color', e.target.value)} className="w-8 h-8 rounded-full border-none p-0 bg-transparent"/>
+                                     {PRESET_COLORS.map(c => (
+                                        <button key={c} onClick={() => updateSelectedWord('color', c)} className="w-8 h-8 rounded-full border border-white/10" style={{ backgroundColor: c }} />
+                                     ))}
+                                </div>
+                             </div>
+                         </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-400 font-bold uppercase">Color Theme</label>
+                      <div className="grid grid-cols-4 gap-3">
+                        {THEMES.map(t => (
+                          <button key={t.id} onClick={() => onUpdate(frame.id, 'theme', t)} className={`h-10 rounded-lg border-2 transition-all ${t.bg} ${frame.theme.id === t.id ? 'border-white scale-105 shadow-lg' : 'border-transparent opacity-60'}`}/>
+                        ))}
+                      </div>
+                    </div>
+                </div>
+            )}
+
+             {/* --- TAB: LAYOUT --- */}
+             {activeTab === 'layout' && (
+                 <div className="space-y-6 animate-fade">
+                     <div className="space-y-4">
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-400 font-bold uppercase"><span>Font Size</span> <span>{frame.layout.fontSize}px</span></div>
+                            <input type="range" min="20" max="200" step="2" value={frame.layout.fontSize} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, fontSize: parseInt(e.target.value)})} className="w-full h-2 bg-gray-800 rounded-lg appearance-none accent-purple-500"/>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-400 font-bold uppercase"><span>Scale</span> <span>{frame.layout.scale}x</span></div>
+                            <input type="range" min="0.1" max="3" step="0.1" value={frame.layout.scale} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, scale: parseFloat(e.target.value)})} className="w-full h-2 bg-gray-800 rounded-lg appearance-none accent-purple-500"/>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-400 font-bold uppercase"><span>Rotation</span> <span>{frame.layout.rotation}°</span></div>
+                            <input type="range" min="-180" max="180" step="5" value={frame.layout.rotation} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, rotation: parseInt(e.target.value)})} className="w-full h-2 bg-gray-800 rounded-lg appearance-none accent-purple-500"/>
+                        </div>
+                    </div>
+                    <ShadowControls 
+                        label="Scene Shadow"
+                        shadow={frame.layout.shadow} 
+                        onChange={(newShadow) => onUpdate(frame.id, 'layout', { ...frame.layout, shadow: newShadow })}
+                    />
+                 </div>
+             )}
+
+             {/* --- TAB: MOTION --- */}
+             {activeTab === 'animate' && (
+                 <div className="space-y-4 animate-fade">
+                    {/* ADDED PLAY BUTTON HERE FOR EDIT SECTION */}
+                    <button 
+                        onClick={togglePreview}
+                        className={`w-full py-3 rounded-xl font-bold text-sm mb-4 flex items-center justify-center gap-2 transition-all border border-white/5 ${isPreviewPlaying ? 'bg-red-500 text-white shadow-lg shadow-red-900/40' : 'bg-white text-black hover:bg-gray-200'}`}
+                    >
+                         {isPreviewPlaying ? <Pause size={16}/> : <Play size={16} fill="currentColor"/>}
+                         {isPreviewPlaying ? 'Stop Preview' : 'Play Animation'}
+                    </button>
+
+                    <label className="text-xs text-gray-400 font-bold uppercase">Entrance Animation</label>
+                    <div className="grid grid-cols-1 gap-2">
+                        {ANIMATIONS.map(a => (
+                            <button 
+                                key={a.id} 
+                                onClick={() => onUpdate(frame.id, 'animation', a.id)}
+                                className={`p-4 rounded-xl text-left text-sm font-medium border transition-all ${frame.animation === a.id ? 'bg-purple-600 border-purple-500 text-white shadow-lg' : 'bg-neutral-800 border-white/5 text-gray-400 hover:bg-neutral-700'}`}
+                            >
+                                {a.label}
+                            </button>
+                        ))}
+                    </div>
+                 </div>
+             )}
+
+             {/* --- ADDED TAB: DECORATIONS --- */}
+             {activeTab === 'decor' && (
+                <div className="space-y-6 animate-fade">
+                    <div className="space-y-3">
+                        <label className="text-xs text-gray-400 font-bold uppercase">Select Decoration</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {DECORATIONS.map(d => (
+                                <button 
+                                    key={d.id} 
+                                    onClick={() => onUpdate(frame.id, 'decoration', d.id)}
+                                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all h-24 ${frame.decoration === d.id ? 'bg-purple-600/20 border-purple-500 text-white' : 'bg-neutral-800 border-white/5 text-gray-400 hover:bg-neutral-700'}`}
+                                >
+                                    {d.type === 'image' ? (
+                                        <img src={d.src} className="h-8 w-auto object-contain" alt="" />
+                                    ) : (
+                                        <div className="text-xl font-bold">{d.id === 'none' ? '🚫' : d.id === 'progress-top' ? 'Pb' : '✨'}</div>
+                                    )}
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">{d.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] text-blue-300">
+                        <strong>Tip:</strong> Mascots (Cats/Ducks) will automatically walk across the bottom of the screen when the video plays.
+                    </div>
+                </div>
+            )}
+
         </div>
       </div>
     </div>
@@ -624,6 +734,10 @@ export default function App() {
   const animate = (time) => {
     const elapsed = Date.now() - startTimeRef.current;
     const totalDuration = getTotalDuration();
+    
+    // --- FIX START: Add padding to the end ---
+    const END_BUFFER = 800; // 0.8 seconds buffer so last animation isn't cut off
+    // --- FIX END ---
 
     const progressPercent = Math.min((elapsed / totalDuration) * 100, 100);
     if (progressBarRef.current) {
@@ -642,12 +756,18 @@ export default function App() {
         accumulatedTime += frameDuration;
     }
 
-    if (elapsed >= totalDuration) {
+    // --- FIX START: Logic to keep last frame active during buffer ---
+    if (elapsed >= totalDuration && elapsed < totalDuration + END_BUFFER) {
+        foundIndex = frames.length - 1; // Keep last frame visible
+    }
+    
+    if (elapsed >= totalDuration + END_BUFFER) { // Stop only after buffer
         handleStop();
         setCurrentFrameIndex(frames.length - 1); 
         if (progressBarRef.current) progressBarRef.current.style.width = `100%`;
         return; 
     }
+    // --- FIX END ---
 
     if (foundIndex !== -1 && foundIndex !== currentFrameIndex) {
         setCurrentFrameIndex(foundIndex);
@@ -684,7 +804,8 @@ export default function App() {
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
       layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 40, shadow: DEFAULT_SHADOW },
-      wordLayouts: {}
+      wordLayouts: {},
+      decoration: 'none' // <--- Added default
     }]);
     setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
   };
@@ -739,13 +860,13 @@ export default function App() {
   const activeInnerLayout = {
       x: 0, y: 0, scale: 1, rotation: 0,
       fontSize: activeFrame.layout.fontSize,
-      shadow: activeFrame.layout.shadow // pass shadow
+      shadow: activeFrame.layout.shadow 
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-purple-500 selection:text-white flex flex-col relative">
+    <div className="min-h-[100dvh] bg-[#0a0a0a] text-white font-sans selection:bg-purple-500 selection:text-white flex flex-col relative overflow-hidden">
       
-      {/* --- RENDER EDITOR IF ACTIVE --- */}
+      {/* --- RENDER EDITOR IF ACTIVE (FULL SCREEN OVERLAY) --- */}
       {editingFrame && (
         <SceneEditor 
           frame={editingFrame} 
@@ -763,6 +884,10 @@ export default function App() {
         @keyframes rotate-in { 0% { transform: rotate(-180deg) scale(0); opacity: 0; } 100% { transform: rotate(0) scale(1); opacity: 1; } }
         @keyframes blur-in { 0% { filter: blur(20px); opacity: 0; transform: scale(1.2); } 100% { filter: blur(0); opacity: 1; transform: scale(1); } }
         @keyframes fade-in { 0% { opacity: 0; } 100% { opacity: 1; } }
+        
+        /* ADDED: Walk Animation */
+        @keyframes walk-across { 0% { left: -15%; transform: scaleX(1); } 100% { left: 115%; transform: scaleX(1); } }
+        .animate-walk { position: absolute; bottom: 0; animation: walk-across linear infinite; z-index: 20; }
 
         .animate-stomp { animation: stomp 0.5s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
         .animate-slide-up { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -772,9 +897,9 @@ export default function App() {
         .animate-fade { animation: fade-in 0.3s ease-out forwards; }
         
         .word-hidden { opacity: 0; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #1a1a1a; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
       `}</style>
 
       {/* ... [EXPORT LOADER] ... */}
@@ -818,18 +943,18 @@ export default function App() {
         </div>
       </div>
 
-      <header className="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-black/50 backdrop-blur-md sticky top-0 z-20">
+      <header className="h-14 border-b border-white/10 flex items-center justify-between px-4 lg:px-6 bg-black/50 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
               <Video className="w-4 h-4 text-white" />
             </div>
-            <h1 className="text-lg font-bold tracking-wide">
+            <h1 className="text-lg font-bold tracking-wide hidden md:block">
               Reel<span className="text-purple-500">Maker</span>
             </h1>
         </div>
         <div className="flex items-center gap-2 md:gap-3">
-            <button onClick={() => setIsPricingOpen(true)} className="bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg flex items-center gap-1.5">
-               <Crown className="w-3.5 h-3.5 fill-white/20" /> Pro
+            <button onClick={() => setIsPricingOpen(true)} className="bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-lg flex items-center gap-1.5">
+               <Crown className="w-3.5 h-3.5 fill-white/20" /> <span className="hidden md:inline">Pro</span>
             </button>
            <button onClick={handleExport} className="bg-purple-600 hover:bg-purple-500 px-4 py-1.5 rounded-full text-xs font-semibold transition-all shadow-lg shadow-purple-900/40 flex items-center gap-2">
              Export <Share2 size={12}/>
@@ -837,97 +962,106 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 overflow-hidden lg:h-[calc(100vh-64px)] h-auto">
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-56px)] overflow-hidden">
           
-          {/* --- LEFT COLUMN: TIMELINE & EDITING --- */}
-          <div className="lg:col-span-5 flex flex-col h-[600px] lg:h-full gap-4 order-2 lg:order-1">
-            <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-300">
-                <Video className="w-4 h-4 text-purple-400" /> Script Timeline
-              </h2>
-              <div className="flex items-center gap-2">
-                 <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">{frames.length} Scenes</span>
+          {/* --- PREVIEW SECTION (TOP on mobile, RIGHT on desktop) --- */}
+          <div ref={previewRef} className="lg:w-7/12 h-auto flex flex-col order-1 lg:order-2 shrink-0">
+              <div className="flex-1 bg-neutral-900/50 rounded-2xl border border-white/5 p-4 flex flex-col relative overflow-hidden">
+                 
+                 <div className="flex items-center justify-between mb-4">
+                     <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Preview</span>
+                     </div>
+                     <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded border border-white/5">16:9 HD</span>
+                 </div>
+
+                 <div className="flex-1 flex items-center justify-center overflow-hidden min-h-[250px] lg:min-h-0">
+                    <div className={`relative transition-all duration-300 ease-in-out bg-black rounded-[1rem] border-[3px] border-gray-800 shadow-2xl overflow-hidden flex flex-col aspect-video w-full max-w-[800px] ${isPlaying ? 'scale-[1.01]' : ''}`}>
+                      
+                      <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
+                        
+                        <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
+                        
+                        {/* --- ADDED: DECORATION LAYER IN MAIN PREVIEW --- */}
+                        <DecorationLayer 
+                            type={activeFrame.decoration} 
+                            frameDuration={activeFrame.duration} 
+                            isPlaying={isPlaying} 
+                        />
+
+                        <div className="absolute inset-0 z-30 flex items-center justify-center">
+                            <div style={{ transform: `translate(${activeFrame.layout.x}px, ${activeFrame.layout.y}px) rotate(${activeFrame.layout.rotation}deg) scale(${activeFrame.layout.scale})` }}>
+                                <TransformableText 
+                                  text={activeFrame.text} theme={activeTheme} animation={activeAnim} align={activeFrame.align}
+                                  layout={activeInnerLayout} wordLayouts={activeFrame.wordLayouts} isPlaying={isPlaying}
+                                  activeTool={null} selectedWordIndex={null}
+                                />
+                            </div>
+                        </div>
+
+                      </div>
+                      <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
+                          <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
+                      </div>
+                    </div>
+                 </div>
+
+                 <div className="mt-4 flex gap-3 items-center">
+                     <button onClick={togglePlay} className={`flex-1 flex items-center justify-center gap-2 h-10 rounded-lg font-bold text-sm transition-all active:scale-95 shadow-lg ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
+                        {isPlaying ? <><Pause size={16}/> Stop</> : <><Play size={16} fill="currentColor"/> Preview Reel</>}
+                     </button>
+                     <button onClick={() => setIsMusicEnabled(!isMusicEnabled)} className={`h-10 w-10 flex items-center justify-center rounded-lg transition-colors border ${isMusicEnabled ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-white/5 text-gray-400 border-white/5'}`}>
+                       <Music size={16} />
+                     </button>
+                 </div>
               </div>
+          </div>
+
+          {/* --- TIMELINE SECTION (BOTTOM on mobile, LEFT on desktop) --- */}
+          <div className="lg:w-5/12 flex flex-col h-full gap-4 order-2 lg:order-1 overflow-hidden">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-300">
+                <Film className="w-4 h-4 text-purple-400" /> Scenes ({frames.length})
+              </h2>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar pb-24">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pb-10">
               {frames.map((frame, index) => (
                 <div key={frame.id} 
                   onClick={() => setCurrentFrameIndex(index)}
-                  className={`flex flex-col gap-3 p-4 rounded-xl border transition-all duration-200 cursor-pointer ${currentFrameIndex === index ? 'bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)] ring-1 ring-purple-500/20' : 'bg-neutral-900 border-white/10 hover:border-white/20'}`}
+                  className={`flex flex-col gap-3 p-3 rounded-xl border transition-all duration-200 cursor-pointer ${currentFrameIndex === index ? 'bg-purple-500/5 border-purple-500/50 ring-1 ring-purple-500/20' : 'bg-neutral-900 border-white/10 hover:border-white/20'}`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex flex-col gap-1 items-center justify-center pt-1">
-                      <button onClick={(e) => { e.stopPropagation(); handleMoveFrame(index, -1); }} disabled={index === 0} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowUp className="w-3 h-3" /></button>
-                      <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-xs font-mono text-gray-500">{index + 1}</div>
-                      <button onClick={(e) => { e.stopPropagation(); handleMoveFrame(index, 1); }} disabled={index === frames.length - 1} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowDown className="w-3 h-3" /></button>
+                    <div className="flex flex-col gap-0.5 items-center justify-center pt-1">
+                      <button onClick={(e) => { e.stopPropagation(); handleMoveFrame(index, -1); }} disabled={index === 0} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowUp size={12} /></button>
+                      <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-[10px] font-mono text-gray-500">{index + 1}</div>
+                      <button onClick={(e) => { e.stopPropagation(); handleMoveFrame(index, 1); }} disabled={index === frames.length - 1} className="text-gray-600 hover:text-white disabled:opacity-20"><ArrowDown size={12} /></button>
                     </div>
-                    <textarea value={frame.text} onChange={(e) => handleUpdateFrame(frame.id, 'text', e.target.value)} placeholder="Enter scene text..." rows={2} className="flex-1 bg-black/20 rounded-lg border border-white/5 p-2 text-sm text-white placeholder-gray-600 focus:border-purple-500/50 outline-none resize-none" disabled={isPlaying} />
-                    <div className="flex flex-col gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); setEditingFrameId(frame.id); setCurrentFrameIndex(index); }} className="p-2 text-white bg-purple-600 hover:bg-purple-500 rounded-lg transition-all shadow-lg shadow-purple-900/20" title="Edit Scene"><Edit3 className="w-4 h-4" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); handleRemoveFrame(frame.id); }} className="p-2 text-gray-600 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                    
+                    <div className="flex-1 min-w-0" onClick={(e) => { e.stopPropagation(); setEditingFrameId(frame.id); setCurrentFrameIndex(index); }}>
+                          <div className="bg-black/40 rounded-lg border border-white/5 p-2 mb-2 text-sm text-gray-300 truncate font-medium">
+                              {frame.text || <span className="text-gray-600 italic">Empty scene...</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <span className="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={10}/> {frame.duration}s</span>
+                             <span className="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded capitalize">{frame.theme.name}</span>
+                          </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 pl-9">
-                    <div className="flex items-center gap-2 bg-black/20 rounded-md px-2 py-1.5 border border-white/5 w-full">
-                      <Clock className="w-3 h-3 text-gray-500" />
-                      <input type="range" min="0.5" max="10" step="0.5" value={frame.duration} onChange={(e) => handleUpdateFrame(frame.id, 'duration', parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                      <span className="text-xs font-mono text-gray-400 w-6">{frame.duration}s</span>
+
+                    <div className="flex flex-col gap-2">
+                        <button onClick={(e) => { e.stopPropagation(); setEditingFrameId(frame.id); setCurrentFrameIndex(index); }} className="p-2 bg-white text-black rounded-lg shadow hover:bg-gray-200" title="Edit Scene"><Edit3 size={16} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); handleRemoveFrame(frame.id); }} className="p-2 text-gray-500 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all" title="Delete"><Trash2 size={16} /></button>
                     </div>
                   </div>
                 </div>
               ))}
               <button onClick={handleAddFrame} className="w-full py-4 border-2 border-dashed border-white/10 rounded-xl text-gray-500 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all flex items-center justify-center gap-2 font-medium">
-                <Plus className="w-5 h-5" /> Add Scene
-              </button>
-            </div>
-
-            <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 flex gap-3 items-center shadow-2xl z-10 sticky bottom-0 lg:static">
-              <button onClick={togglePlay} className={`flex-1 flex items-center justify-center gap-2 h-12 rounded-xl font-bold text-lg transition-all transform active:scale-95 shadow-lg ${isPlaying ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white text-black hover:bg-gray-200'}`}>
-                {isPlaying ? <><Pause className="w-5 h-5" /> Stop</> : <><Play className="w-5 h-5 fill-current" /> Play Preview</>}
-              </button>
-              <button onClick={() => setIsMusicEnabled(!isMusicEnabled)} className={`h-12 w-12 flex items-center justify-center rounded-xl transition-colors border ${isMusicEnabled ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-white/5 text-gray-400 border-white/5 hover:text-white'}`}>
-                <Music className="w-5 h-5" />
+                <Plus size={20} /> Add New Scene
               </button>
             </div>
           </div>
 
-          {/* --- RIGHT COLUMN: PREVIEW --- */}
-          <div ref={previewRef} className="lg:col-span-7 h-auto min-h-[500px] lg:h-full flex flex-col bg-neutral-900/50 rounded-3xl border border-white/5 p-4 lg:p-8 relative order-1 lg:order-2">
-              <div className="flex justify-center mb-6">
-                 <span className="text-gray-400 text-xs font-mono bg-white/5 px-3 py-1 rounded-full border border-white/5">Aspect Ratio: 16:9 (YouTube)</span>
-              </div>
-
-              <div className="flex-1 flex items-center justify-center overflow-hidden">
-                <div className={`relative transition-all duration-500 ease-in-out bg-black rounded-[1rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col aspect-video w-full max-w-[800px] ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
-                  
-                  <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
-                    
-                    <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
-                    
-                    <div className="absolute inset-0 z-30 flex items-center justify-center">
-                        <div style={{ transform: `translate(${activeFrame.layout.x}px, ${activeFrame.layout.y}px) rotate(${activeFrame.layout.rotation}deg) scale(${activeFrame.layout.scale})` }}>
-                            <TransformableText 
-                              text={activeFrame.text}
-                              theme={activeTheme}
-                              animation={activeAnim}
-                              align={activeFrame.align}
-                              layout={activeInnerLayout} // Pass zeroed layout so we don't apply it twice
-                              wordLayouts={activeFrame.wordLayouts}
-                              isPlaying={isPlaying}
-                              activeTool={null} 
-                              selectedWordIndex={null}
-                            />
-                        </div>
-                    </div>
-
-                  </div>
-                  <div className="h-1 bg-white/20 w-full mt-auto absolute bottom-0 left-0 z-20">
-                      <div ref={progressBarRef} className="h-full bg-red-600 shadow-[0_0_10px_red] w-0"></div>
-                  </div>
-                </div>
-              </div>
-          </div>
       </main>
 
     </div>
