@@ -7,8 +7,9 @@ import {
   MousePointer2, RefreshCcw,
   GripHorizontal, CircleDashed, Layers,
   Layout, Type as TypeIcon, Image as ImageIcon, Film,
-  Sparkles, Settings // Added Settings icon
+  Sparkles, Settings, Volume2, Upload, Mic 
 } from 'lucide-react';
+import VoiceRecorder from './VoiceRecorder'; 
 
 // --- 1. ASSETS & CONSTANTS ---
 
@@ -41,7 +42,7 @@ const DECORATIONS = [
     type: 'image', 
     src: './cat.gif', 
     animation: 'animate-walk', 
-    duration: '6s', // Default for scene, overridden for global
+    duration: '6s', 
     width: '80px' 
   },
   { 
@@ -91,33 +92,33 @@ const INITIAL_FRAMES = [
     id: 101, 
     text: "POV: You found the ULTIMATE tool.", 
     duration: 3, 
-    theme: THEMES[0], // Midnight
+    theme: THEMES[0], 
     animation: 'animate-blur-in', 
     align: 'center', 
     layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 55, shadow: { ...DEFAULT_SHADOW, y: 4, blur: 15 } }, 
     wordLayouts: {
-      5: { color: '#FACC15', scale: 1.2, font: '"Anton", sans-serif', rotation: -5 } // Highlights "ULTIMATE"
-    },
+      5: { color: '#FACC15', scale: 1.2, font: '"Anton", sans-serif', rotation: -5 } 
+    }, 
     decoration: 'none' 
   },
   { 
     id: 102, 
     text: "Make your content go VIRAL", 
     duration: 1.5, 
-    theme: THEMES[6], // Neon
+    theme: THEMES[6], 
     animation: 'animate-stomp', 
     align: 'center', 
     layout: { x: 0, y: 0, scale: 1.1, rotation: -2, fontSize: 65, shadow: DEFAULT_SHADOW }, 
     wordLayouts: {
-        4: { color: '#9333ea', font: '"Bangers", system-ui', scale: 1.4 } // Highlights "VIRAL"
-    },
+        4: { color: '#9333ea', font: '"Bangers", system-ui', scale: 1.4 } 
+    }, 
     decoration: 'none' 
   },
   { 
     id: 103, 
     text: "Even the robot is dancing!", 
     duration: 2.5, 
-    theme: THEMES[1], // Lemonade
+    theme: THEMES[1], 
     animation: 'animate-slide-up', 
     align: 'center', 
     layout: { x: 0, y: -40, scale: 1, rotation: 0, fontSize: 45, shadow: DEFAULT_SHADOW }, 
@@ -128,15 +129,15 @@ const INITIAL_FRAMES = [
     id: 104, 
     text: "START CREATING NOW", 
     duration: 3, 
-    theme: THEMES[2], // Crimson
+    theme: THEMES[2], 
     animation: 'animate-pop-in', 
     align: 'center', 
     layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 60, shadow: DEFAULT_SHADOW }, 
     wordLayouts: { 
-        0: { curve: -20, font: '"Anton", sans-serif' }, 
-        1: { curve: -10, font: '"Anton", sans-serif' }, 
-        2: { curve: 20, font: '"Anton", sans-serif' } 
-    },
+        0: { font: '"Anton", sans-serif' }, 
+        1: { font: '"Anton", sans-serif', scale: 1.1 }, 
+        2: { font: '"Anton", sans-serif' } 
+    }, 
     decoration: 'spotlight'
   }
 ];
@@ -149,7 +150,218 @@ const getAlignmentClass = (align) => {
   return 'text-center justify-center';
 };
 
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};
+
 // --- 3. SUB-COMPONENTS ---
+
+// --- UPDATED MUSIC MANAGER TO INCLUDE TRANSPARENT VOICEOVER MODE ---
+const MusicManager = ({ isOpen, onClose, library, onUpload, onSelect, currentVideoDuration, onStartRecording, onStopRecording }) => {
+    const [activeTab, setActiveTab] = useState('library'); // 'library' | 'voiceover'
+    const [view, setView] = useState('library');
+    const [selectedTrack, setSelectedTrack] = useState(null);
+    const [trimStart, setTrimStart] = useState(0);
+    const fileInputRef = useRef(null);
+    const audioPreviewRef = useRef(new Audio());
+
+    useEffect(() => {
+        if (!isOpen) {
+            audioPreviewRef.current.pause();
+            setView('library');
+            setActiveTab('library');
+        }
+    }, [isOpen]);
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const url = URL.createObjectURL(file);
+            const tempAudio = new Audio(url);
+            tempAudio.addEventListener('loadedmetadata', () => {
+                const newTrack = {
+                    id: Date.now().toString(),
+                    title: file.name.replace(/\.[^/.]+$/, ""),
+                    duration: tempAudio.duration,
+                    url: url,
+                    file: file,
+                    type: 'music'
+                };
+                onUpload(newTrack);
+                setView('library'); 
+            });
+        }
+    };
+
+    const handleTrackClick = (track) => {
+        setSelectedTrack(track);
+        setTrimStart(0);
+        setView('trimmer');
+        audioPreviewRef.current.src = track.url;
+        audioPreviewRef.current.currentTime = 0;
+        audioPreviewRef.current.play().catch(e => console.log("Auto-play blocked", e));
+    };
+
+    const handleApply = () => {
+        audioPreviewRef.current.pause();
+        onSelect({ ...selectedTrack, startTime: trimStart });
+        onClose();
+    };
+
+    // Wrapper to handle voiceover saving (defaults start time to 0)
+    const handleVoiceSave = (voiceData) => {
+        onSelect({ ...voiceData, startTime: 0 });
+        onClose();
+    };
+
+    const togglePreviewPlay = () => {
+        if (audioPreviewRef.current.paused) {
+            audioPreviewRef.current.play();
+        } else {
+            audioPreviewRef.current.pause();
+        }
+    };
+
+    const handleSliderChange = (e) => {
+        const val = parseFloat(e.target.value);
+        setTrimStart(val);
+        audioPreviewRef.current.currentTime = val;
+        if(audioPreviewRef.current.paused) audioPreviewRef.current.play();
+    };
+
+    if (!isOpen) return null;
+
+    // Logic: If voiceover tab is active, we want transparent background so user can see video
+    const isVoiceMode = activeTab === 'voiceover';
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            
+            {/* Backdrop: Transparent in voice mode to see video */}
+            <div 
+                className={`absolute inset-0 transition-all duration-500 ${isVoiceMode ? 'bg-black/20' : 'bg-black/80 backdrop-blur-sm'}`} 
+                onClick={onClose}
+            ></div>
+
+            {/* Main Modal Container */}
+            <div className={`
+                border border-white/10 w-full max-w-lg rounded-3xl relative z-10 overflow-hidden shadow-2xl flex flex-col transition-all duration-500
+                ${isVoiceMode ? 'bg-transparent border-none shadow-none h-full justify-end' : 'bg-[#0f0f0f] h-[70vh]'}
+            `}>
+                
+                {/* Header: Hide in voice mode */}
+                {!isVoiceMode && (
+                    <div className="border-b border-white/5 bg-neutral-900">
+                        <div className="p-5 flex items-center justify-between">
+                            <h2 className="text-lg font-bold flex items-center gap-2"><Music className="w-5 h-5 text-purple-500" /> Audio Studio</h2>
+                            <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-white" /></button>
+                        </div>
+                        
+                        {/* TABS */}
+                        <div className="flex px-5 gap-6">
+                            <button 
+                                onClick={() => { setActiveTab('library'); setView('library'); }}
+                                className={`pb-3 text-sm font-bold border-b-2 transition-all ${activeTab === 'library' ? 'border-purple-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                            >
+                                Music Library
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('voiceover')}
+                                className={`pb-3 text-sm font-bold border-b-2 transition-all ${activeTab === 'voiceover' ? 'border-red-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                            >
+                                Record Voiceover
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className={`flex-1 overflow-hidden flex flex-col ${isVoiceMode ? '' : 'bg-black'}`}>
+                    
+                    {/* --- VIEW: MUSIC LIBRARY --- */}
+                    {activeTab === 'library' && (
+                        view === 'library' ? (
+                            <>
+                                <div className="p-4 border-b border-white/5">
+                                    <button onClick={() => fileInputRef.current.click()} className="w-full py-3 bg-white/10 hover:bg-white/20 border border-dashed border-white/20 rounded-xl flex items-center justify-center gap-2 transition-all text-sm font-bold text-white">
+                                        <Plus size={16} /> Import Music from Device
+                                    </button>
+                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="audio/*" className="hidden" />
+                                </div>
+                                <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-2 mb-2">My Library</h3>
+                                    {library.length === 0 ? (
+                                        <div className="text-center py-10 text-gray-600 text-sm italic">No songs added yet. <br/>Upload a file to get started.</div>
+                                    ) : (
+                                        library.map(track => (
+                                            <div key={track.id} onClick={() => handleTrackClick(track)} className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 cursor-pointer group border border-transparent hover:border-white/10 transition-all">
+                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white shadow-lg"><Music size={18} /></div>
+                                                    <div className="min-w-0"><div className="text-sm font-bold text-white truncate">{track.title}</div><div className="text-xs text-gray-500">{formatTime(track.duration)}</div></div>
+                                                </div>
+                                                <button className="px-3 py-1.5 bg-white text-black text-xs font-bold rounded-full opacity-0 group-hover:opacity-100 transition-opacity">Use</button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            // TRIMMER VIEW
+                            <div className="flex-1 flex flex-col p-6 animate-fade">
+                                <button onClick={() => setView('library')} className="text-xs text-gray-500 hover:text-white mb-4 flex items-center gap-1">← Back to Library</button>
+                                <div className="mb-6 text-center">
+                                    <div className="text-xl font-bold text-white mb-1">{selectedTrack?.title}</div>
+                                    <div className="text-sm text-purple-400 font-medium">Video Duration: {currentVideoDuration}s</div>
+                                </div>
+                                <div className="relative h-24 bg-neutral-900 rounded-xl overflow-hidden mb-6 border border-white/10 flex items-center justify-center">
+                                    <div className="flex gap-1 h-12 w-full px-2 justify-center opacity-30">{[...Array(40)].map((_,i) => (<div key={i} className="flex-1 bg-white rounded-full" style={{height: `${Math.random() * 100}%`}}></div>))}</div>
+                                    <div className="absolute text-gray-500 text-xs font-mono">Audio Preview</div>
+                                </div>
+                                <div className="space-y-4 mb-8">
+                                    <div className="flex justify-between text-xs text-gray-400 font-bold uppercase"><span>Start: {formatTime(trimStart)}</span><span>End: {formatTime(Math.min(trimStart + currentVideoDuration, selectedTrack.duration))}</span></div>
+                                    <div className="relative h-10">
+                                        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-2 bg-gray-800 rounded-full"></div>
+                                        <div className="absolute top-1/2 -translate-y-1/2 h-2 bg-purple-500 rounded-full pointer-events-none" style={{left: `${(trimStart / selectedTrack.duration) * 100}%`, width: `${(currentVideoDuration / selectedTrack.duration) * 100}%`}}></div>
+                                        <input type="range" min="0" max={Math.max(0, selectedTrack.duration - currentVideoDuration)} step="0.1" value={trimStart} onChange={handleSliderChange} className="absolute top-0 w-full h-full opacity-0 cursor-pointer"/>
+                                        <div className="absolute top-1/2 -translate-y-1/2 w-4 h-6 bg-white rounded shadow-lg pointer-events-none border border-gray-300" style={{ left: `${(trimStart / Math.max(0.1, selectedTrack.duration - currentVideoDuration)) * (100 - ((currentVideoDuration/selectedTrack.duration)*100))}%` }}></div>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 text-center">Drag slider to choose which part of the song to play</p>
+                                </div>
+                                <div className="mt-auto flex gap-3">
+                                    <button onClick={togglePreviewPlay} className="flex-1 py-3 bg-neutral-800 hover:bg-neutral-700 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"><Volume2 size={16} /> Preview Section</button>
+                                    <button onClick={handleApply} className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-900/40"><Check size={16} /> Apply Music</button>
+                                </div>
+                            </div>
+                        )
+                    )}
+
+                    {/* --- VIEW: VOICEOVER RECORDER --- */}
+                    {activeTab === 'voiceover' && (
+                        <div className="h-full flex flex-col relative">
+                            {/* Exit button since header is hidden */}
+                            <div className="absolute top-4 right-4 z-50">
+                                <button 
+                                    onClick={() => setActiveTab('library')} 
+                                    className="bg-black/50 text-white px-4 py-2 rounded-full text-xs backdrop-blur-md border border-white/10 hover:bg-black/70 font-bold transition-all shadow-lg"
+                                >
+                                    Exit Recording
+                                </button>
+                            </div>
+
+                            <VoiceRecorder 
+                                onStartPlayback={onStartRecording} 
+                                onStopPlayback={onStopRecording}
+                                onSave={handleVoiceSave}
+                            />
+                        </div>
+                    )}
+
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const PricingCard = ({ title, price, period, features, recommended, onSelect }) => (
   <div className={`relative p-6 rounded-2xl border flex flex-col h-full ${recommended ? 'bg-gradient-to-b from-purple-900/40 to-black border-purple-500/50 shadow-2xl shadow-purple-900/20' : 'bg-neutral-900/50 border-white/10'}`}>
@@ -175,21 +387,23 @@ const PricingCard = ({ title, price, period, features, recommended, onSelect }) 
   </div>
 );
 
-// --- MODIFIED DECORATION LAYER TO HANDLE GLOBAL DURATION ---
+// --- DECORATION LAYER (FIXED TIMING LOGIC) ---
 const DecorationLayer = ({ type, duration, isPlaying, isGlobal = false }) => {
   const decor = DECORATIONS.find(d => d.id === type);
   if (!decor || decor.id === 'none') return null;
 
-  // 1. IMAGE MASCOTS (GIFs) - Now syncs with total duration if global
+  // Use a string template for duration to avoid number/string mismatch issues
+  const animDuration = isGlobal ? `${duration}s` : (decor.duration || `${duration}s`);
+  const playState = isPlaying ? 'running' : 'paused';
+
+  // 1. IMAGE MASCOTS (GIFs)
   if (decor.type === 'image') {
     return (
       <div 
         className={`absolute bottom-0 z-20 ${decor.animation}`} 
         style={{ 
-           // If global, duration is the full video length. If scene, it's scene length or default.
-           animationDuration: isGlobal ? `${duration}s` : (decor.duration || `${duration}s`),
-           // For global elements, we must control play state manually effectively
-           animationPlayState: isPlaying ? 'running' : 'paused',
+           animationDuration: animDuration,
+           animationPlayState: playState,
            animationTimingFunction: isGlobal ? 'linear' : 'ease-in-out',
            opacity: 1 
         }}
@@ -204,7 +418,7 @@ const DecorationLayer = ({ type, duration, isPlaying, isGlobal = false }) => {
     );
   }
 
-  // 2. PROGRESS BAR
+  // 2. PROGRESS BAR (TOP)
   if (decor.id === 'progress-top') {
     return (
       <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/10 z-40">
@@ -212,8 +426,8 @@ const DecorationLayer = ({ type, duration, isPlaying, isGlobal = false }) => {
             className="h-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"
             style={{ 
                 width: isPlaying ? '100%' : '0%',
-                // If global, bar fills over total duration.
-                transition: isPlaying ? `width ${duration}s linear` : 'none'
+                // Crucial: Global bars need to reset instantly when stopped
+                transition: isPlaying ? `width ${animDuration} linear` : 'none'
             }}
         ></div>
       </div>
@@ -226,7 +440,7 @@ const DecorationLayer = ({ type, duration, isPlaying, isGlobal = false }) => {
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           {[...Array(20)].map((_, i) => {
              const size = Math.random() * 4 + 2; 
-             const animDuration = Math.random() * 10 + 10;
+             const particleDur = Math.random() * 10 + 10;
              const delay = -(Math.random() * 20); 
 
              return (
@@ -237,7 +451,8 @@ const DecorationLayer = ({ type, duration, isPlaying, isGlobal = false }) => {
                    height: `${size}px`,
                    opacity: Math.random() * 0.5 + 0.3, 
                    animationDelay: `${delay}s`,
-                   animationDuration: `${animDuration}s`,
+                   animationDuration: `${particleDur}s`,
+                   animationPlayState: playState, // Respect Play/Pause
                    filter: Math.random() > 0.6 ? 'blur(1px)' : 'none'
                }} />
              );
@@ -367,7 +582,6 @@ const TransformableText = ({
   );
 };
 
-// --- SHADOW CONTROLS COMPONENT ---
 const ShadowControls = ({ shadow, onChange, label = "Shadow" }) => {
     const s = shadow || DEFAULT_SHADOW;
     const update = (key, val) => onChange({ ...s, [key]: val });
@@ -484,14 +698,12 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
 
   if (!frame.layout.fontSize) frame.layout.fontSize = 40;
 
-  // Helper to prevent double transform in editor
   const innerLayout = { 
       x: 0, y: 0, scale: 1, rotation: 0, 
       fontSize: frame.layout.fontSize,
       shadow: frame.layout.shadow 
   };
 
-  // Tab definitions
   const TABS = [
       { id: 'text', icon: TypeIcon, label: 'Content' },
       { id: 'style', icon: Palette, label: 'Style' },
@@ -503,14 +715,13 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
   return (
     <div className="fixed inset-0 z-[100] bg-[#000] flex flex-col md:flex-row h-[100dvh]">
       
-      {/* 1. TOP SECTION: PREVIEW (Fixed height on mobile to ensure visibility) */}
+      {/* 1. TOP SECTION: PREVIEW */}
       <div 
         className="relative h-[45vh] md:h-full md:flex-1 bg-[#111] flex items-center justify-center overflow-hidden order-1 md:order-2 border-b md:border-b-0 md:border-l border-white/10" 
         onPointerMove={handlePointerMove} 
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-         {/* Top Bar inside Preview */}
         <div className="absolute top-0 left-0 right-0 p-4 z-50 flex justify-between items-start pointer-events-none">
              <div className="bg-black/60 backdrop-blur rounded-full px-3 py-1 text-xs font-bold text-white flex items-center gap-2 pointer-events-auto">
                 <button onClick={togglePreview} className="flex items-center gap-1.5 hover:text-purple-400">
@@ -522,19 +733,19 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
              </button>
         </div>
 
-        {/* Drag Helper Label */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur rounded-full px-3 py-1 text-[10px] text-gray-300 pointer-events-none z-50">
            {activeTool === 'move' ? 'Drag text to move' : 'Tap word to edit'}
         </div>
 
-        {/* The Canvas */}
         <div ref={containerRef} className="aspect-video w-full max-w-[800px] bg-black relative shadow-2xl overflow-hidden touch-none group">
              <div className={`absolute inset-0 transition-colors duration-300 ${frame.theme.bg}`}>
                  <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
              </div>
              
-             {/* DECORATION LAYER IN EDITOR PREVIEW (Local Scene Only) */}
+             {/* EDIT PREVIEW LOCAL DECORATION */}
              <DecorationLayer 
+                // IMPORTANT: In editor, we force a re-render on toggle preview to restart anims
+                key={isPreviewPlaying ? 'playing' : 'stopped'}
                 type={frame.decoration} 
                 duration={frame.duration} 
                 isPlaying={isPreviewPlaying} 
@@ -550,6 +761,8 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                    className={`relative p-2 transition-colors w-full max-w-[90%] ${activeTool === 'move' && !isPreviewPlaying ? 'border-2 border-purple-500/50 bg-purple-500/10 rounded-lg cursor-move' : ''}`}
                 >
                   <TransformableText 
+                      // Force re-render on play to restart text animations
+                      key={isPreviewPlaying ? 'playing' : 'stopped'}
                       text={frame.text} theme={frame.theme} animation={frame.animation} align={frame.align}
                       layout={innerLayout} wordLayouts={frame.wordLayouts} isPlaying={isPreviewPlaying}
                       activeTool={activeTool} selectedWordIndex={selectedWordIndex}
@@ -560,10 +773,9 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
         </div>
       </div>
 
-      {/* 2. BOTTOM SECTION: CONTROLS (Scrollable area + Tabs) */}
+      {/* 2. BOTTOM SECTION: CONTROLS */}
       <div className="h-[55vh] md:h-full md:w-[400px] bg-[#0a0a0a] flex flex-col order-2 md:order-1 relative z-20 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
         
-        {/* Tab Navigation */}
         <div className="flex border-b border-white/10 bg-neutral-900">
             {TABS.map(tab => {
                 const Icon = tab.icon;
@@ -581,7 +793,6 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
             })}
         </div>
 
-        {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 bg-[#0a0a0a]">
             
             {/* --- TAB: TEXT CONTENT --- */}
@@ -617,7 +828,6 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
             {/* --- TAB: STYLE --- */}
             {activeTab === 'style' && (
                 <div className="space-y-6 animate-fade">
-                    {/* EDIT MODE TOGGLE */}
                       <div className="bg-neutral-800/50 p-3 rounded-xl border border-white/10 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                              <div className={`p-2 rounded-lg ${activeTool === 'word' ? 'bg-purple-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
@@ -715,7 +925,6 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
              {/* --- TAB: MOTION --- */}
              {activeTab === 'animate' && (
                  <div className="space-y-4 animate-fade">
-                    {/* ADDED PLAY BUTTON HERE FOR EDIT SECTION */}
                     <button 
                         onClick={togglePreview}
                         className={`w-full py-3 rounded-xl font-bold text-sm mb-4 flex items-center justify-center gap-2 transition-all border border-white/5 ${isPreviewPlaying ? 'bg-red-500 text-white shadow-lg shadow-red-900/40' : 'bg-white text-black hover:bg-gray-200'}`}
@@ -739,7 +948,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                  </div>
              )}
 
-             {/* --- ADDED TAB: DECORATIONS --- */}
+             {/* --- TAB: DECORATIONS --- */}
              {activeTab === 'decor' && (
                 <div className="space-y-6 animate-fade">
                     <div className="space-y-3">
@@ -765,7 +974,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                         <strong>Tip:</strong> This decoration only appears for this specific scene. To add a decoration for the <strong>entire video</strong>, use the Settings icon in the header.
                     </div>
                 </div>
-            )}
+             )}
 
         </div>
       </div>
@@ -780,33 +989,55 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0); 
   const [editingFrameId, setEditingFrameId] = useState(null); 
-  const [isMusicEnabled, setIsMusicEnabled] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [playbackSessionId, setPlaybackSessionId] = useState(0);
 
-  // --- NEW: GLOBAL SETTINGS STATE ---
+  // --- NEW: GLOBAL SETTINGS & MUSIC STATE ---
   const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
   const [globalDecor, setGlobalDecor] = useState('none');
+  const [isMusicModalOpen, setIsMusicModalOpen] = useState(false);
+  const [musicLibrary, setMusicLibrary] = useState([]); 
+  const [activeMusic, setActiveMusic] = useState(null); 
 
   const requestRef = useRef();
   const startTimeRef = useRef(0);
   const progressBarRef = useRef(null);
   const scrollRef = useRef(null);
   const previewRef = useRef(null);
+  const audioRef = useRef(new Audio()); 
 
   const getTotalDuration = () => frames.reduce((total, frame) => total + (frame.duration * 1000), 0);
   // Get Total Duration in Seconds for CSS animations
   const totalDurationSec = frames.reduce((total, frame) => total + frame.duration, 0);
 
+  // --- AUDIO LOGIC ---
+  useEffect(() => {
+    if (activeMusic) {
+        audioRef.current.src = activeMusic.url;
+        audioRef.current.volume = 0.8;
+    } else {
+        audioRef.current.src = '';
+    }
+  }, [activeMusic]);
+
+  useEffect(() => {
+      if (isPlaying && activeMusic) {
+          audioRef.current.currentTime = activeMusic.startTime;
+          audioRef.current.play().catch(e => console.error("Play error", e));
+      } else {
+          audioRef.current.pause();
+      }
+  }, [isPlaying, playbackSessionId]);
+
   const animate = (time) => {
     const elapsed = Date.now() - startTimeRef.current;
     const totalDuration = getTotalDuration();
     
-    // --- FIX START: Add padding to the end ---
-    const END_BUFFER = 800; // 0.8 seconds buffer so last animation isn't cut off
+    // --- FIX: Add padding to the end ---
+    const END_BUFFER = 800; // 0.8 seconds buffer
     // --- FIX END ---
 
     const progressPercent = Math.min((elapsed / totalDuration) * 100, 100);
@@ -826,9 +1057,9 @@ export default function App() {
         accumulatedTime += frameDuration;
     }
 
-    // --- FIX START: Logic to keep last frame active during buffer ---
+    // --- FIX: Keep last frame active during buffer ---
     if (elapsed >= totalDuration && elapsed < totalDuration + END_BUFFER) {
-        foundIndex = frames.length - 1; // Keep last frame visible
+        foundIndex = frames.length - 1; 
     }
     
     if (elapsed >= totalDuration + END_BUFFER) { // Stop only after buffer
@@ -837,8 +1068,7 @@ export default function App() {
         if (progressBarRef.current) progressBarRef.current.style.width = `100%`;
         return; 
     }
-    // --- FIX END ---
-
+    
     if (foundIndex !== -1 && foundIndex !== currentFrameIndex) {
         setCurrentFrameIndex(foundIndex);
     }
@@ -848,7 +1078,7 @@ export default function App() {
 
   const handlePlay = () => {
     if (frames.length === 0) return;
-    setPlaybackSessionId(prev => prev + 1); // <--- Force a new playback session key
+    setPlaybackSessionId(prev => prev + 1); // <--- Key for restarting animations
     setIsPlaying(true);
     setCurrentFrameIndex(0); 
     startTimeRef.current = Date.now();
@@ -920,6 +1150,17 @@ export default function App() {
     setTimeout(() => setToast({ show: false, message: '' }), 3000);
   };
 
+  // Music Handlers
+  const handleMusicUpload = (track) => {
+      setMusicLibrary(prev => [...prev, track]);
+      showToast("Music imported to library");
+  };
+
+  const handleMusicSelect = (track) => {
+      setActiveMusic(track);
+      showToast(`Added: ${track.title}`);
+  };
+
   useEffect(() => { return () => cancelAnimationFrame(requestRef.current); }, []);
 
   const activeFrame = frames[currentFrameIndex] || frames[0];
@@ -928,8 +1169,8 @@ export default function App() {
   const editingFrame = frames.find(f => f.id === editingFrameId);
 
   // Helper for preview double transform prevention
-  const activeInnerLayout = {
-      x: 0, y: 0, scale: 1, rotation: 0,
+  const activeInnerLayout = { 
+      x: 0, y: 0, scale: 1, rotation: 0, 
       fontSize: activeFrame.layout.fontSize,
       shadow: activeFrame.layout.shadow 
   };
@@ -946,6 +1187,19 @@ export default function App() {
         />
       )}
 
+      {/* --- MUSIC MANAGER MODAL --- */}
+      {/* Updated to pass playback controls to VoiceRecorder */}
+      <MusicManager 
+          isOpen={isMusicModalOpen} 
+          onClose={() => setIsMusicModalOpen(false)}
+          library={musicLibrary}
+          onUpload={handleMusicUpload}
+          onSelect={handleMusicSelect}
+          currentVideoDuration={totalDurationSec}
+          onStartRecording={handlePlay}
+          onStopRecording={handleStop}
+      />
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Courier+Prime:wght@400;700&family=Pacifico&family=Playfair+Display:wght@400;900&display=swap');
 
@@ -956,16 +1210,15 @@ export default function App() {
         @keyframes blur-in { 0% { filter: blur(20px); opacity: 0; transform: scale(1.2); } 100% { filter: blur(0); opacity: 1; transform: scale(1); } }
         @keyframes fade-in { 0% { opacity: 0; } 100% { opacity: 1; } }
         
-        /* ADDED: Walk Animation */
-        /* Changed to start slightly offscreen left and end slightly offscreen right */
+        /* Walk Animation */
         @keyframes walk-across { 0% { left: -100px; transform: scaleX(1); } 100% { left: 100%; transform: scaleX(1); } }
         .animate-walk { position: absolute; bottom: 0; animation: walk-across linear infinite; z-index: 20; }
 
-        /* ADDED: Robot Bounce Animation */
+        /* Robot Bounce Animation */
         @keyframes bounce-decor { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
         .animate-bounce { position: absolute; bottom: 10px; right: 10%; animation: bounce-decor 2s ease-in-out infinite; z-index: 20; }
 
-        /* --- UPDATED: Floating Particles Animation (Magical Style) --- */
+        /* Floating Particles Animation */
         @keyframes float-dust {
             0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
             20% { opacity: 1; }
@@ -980,7 +1233,7 @@ export default function App() {
             border-radius: 50%;
             animation: float-dust linear infinite;
             pointer-events: none;
-            mix-blend-mode: screen; /* Better blending with dark backgrounds */
+            mix-blend-mode: screen; 
         }
 
         .animate-stomp { animation: stomp 0.5s cubic-bezier(0.1, 0.9, 0.2, 1) forwards; }
@@ -1103,16 +1356,16 @@ export default function App() {
           {/* --- PREVIEW SECTION (TOP on mobile, RIGHT on desktop) --- */}
           <div ref={previewRef} className="lg:w-7/12 h-auto flex flex-col order-1 lg:order-2 shrink-0">
               <div className="flex-1 bg-neutral-900/50 rounded-2xl border border-white/5 p-4 flex flex-col relative overflow-hidden">
-                 
-                 <div className="flex items-center justify-between mb-4">
-                     <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Preview</span>
-                     </div>
-                     <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded border border-white/5">16:9 HD</span>
-                 </div>
+                  
+                  <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Preview</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded border border-white/5">16:9 HD</span>
+                  </div>
 
-                 <div className="flex-1 flex items-center justify-center overflow-hidden min-h-[250px] lg:min-h-0">
+                  <div className="flex-1 flex items-center justify-center overflow-hidden min-h-[250px] lg:min-h-0">
                     <div className={`relative transition-all duration-300 ease-in-out bg-black rounded-[1rem] border-[3px] border-gray-800 shadow-2xl overflow-hidden flex flex-col aspect-video w-full max-w-[800px] ${isPlaying ? 'scale-[1.01]' : ''}`}>
                       
                       <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
@@ -1121,15 +1374,17 @@ export default function App() {
                         
                         {/* --- DECORATION LAYER 1: LOCAL (Per Scene) --- */}
                         <DecorationLayer 
+                            // CRITICAL FIX: Key ensures animation resets on frame change OR restart
+                            key={`local-${activeFrame.id}-${playbackSessionId}`}
                             type={activeFrame.decoration} 
                             duration={activeFrame.duration} 
                             isPlaying={isPlaying} 
                         />
 
                         {/* --- DECORATION LAYER 2: GLOBAL (Entire Video) --- */}
-                        {/* Key Logic: We pass totalDurationSec and isGlobal=true */}
                         <DecorationLayer 
-                             key={`global-${playbackSessionId}`} // Reset animation on play
+                             // CRITICAL FIX: Key ensures global decor only resets on FULL restart
+                             key={`global-${playbackSessionId}`} 
                              type={globalDecor}
                              duration={totalDurationSec}
                              isPlaying={isPlaying}
@@ -1139,7 +1394,8 @@ export default function App() {
                         <div className="absolute inset-0 z-30 flex items-center justify-center">
                             <div style={{ transform: `translate(${activeFrame.layout.x}px, ${activeFrame.layout.y}px) rotate(${activeFrame.layout.rotation}deg) scale(${activeFrame.layout.scale})` }}>
                                 <TransformableText 
-                                  key={`${activeFrame.id}-${playbackSessionId}`} // <--- CRITICAL FIX: Ensures animation plays on EVERY frame change, especially the last one
+                                  // CRITICAL FIX: Reset text animation on frame change
+                                  key={`text-${activeFrame.id}-${playbackSessionId}`}
                                   text={activeFrame.text} theme={activeTheme} animation={activeAnim} align={activeFrame.align}
                                   layout={activeInnerLayout} wordLayouts={activeFrame.wordLayouts} isPlaying={isPlaying}
                                   activeTool={null} selectedWordIndex={null}
@@ -1158,8 +1414,9 @@ export default function App() {
                      <button onClick={togglePlay} className={`flex-1 flex items-center justify-center gap-2 h-10 rounded-lg font-bold text-sm transition-all active:scale-95 shadow-lg ${isPlaying ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
                         {isPlaying ? <><Pause size={16}/> Stop</> : <><Play size={16} fill="currentColor"/> Preview Reel</>}
                      </button>
-                     <button onClick={() => setIsMusicEnabled(!isMusicEnabled)} className={`h-10 w-10 flex items-center justify-center rounded-lg transition-colors border ${isMusicEnabled ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-white/5 text-gray-400 border-white/5'}`}>
-                       <Music size={16} />
+                     <button onClick={() => setIsMusicModalOpen(true)} className={`h-10 px-4 flex items-center justify-center gap-2 rounded-lg transition-colors border ${activeMusic ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-white/5 text-gray-400 border-white/5'}`}>
+                       {activeMusic ? <Volume2 size={16} /> : <Plus size={16} />}
+                       {activeMusic ? (<div className="text-xs font-medium max-w-[80px] truncate">{activeMusic.title}</div>) : (<div className="text-xs font-medium hidden md:block">Add Music</div>)}
                      </button>
                  </div>
               </div>
