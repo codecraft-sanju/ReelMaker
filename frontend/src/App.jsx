@@ -5,7 +5,7 @@ import {
   ArrowUp, ArrowDown, Clock, Edit3, 
   Move, Palette, Type, 
   MousePointer2, RefreshCcw,
-  GripHorizontal, CircleDashed
+  GripHorizontal, CircleDashed, Layers
 } from 'lucide-react';
 
 // --- 1. ASSETS & CONSTANTS ---
@@ -34,7 +34,6 @@ const PRESET_COLORS = [
     '#22C55E', '#3B82F6', '#A855F7', '#EC4899'
 ];
 
-// New Font List
 const FONTS = [
   { name: 'Default', family: 'inherit' },
   { name: 'Impact', family: '"Anton", sans-serif' },
@@ -44,11 +43,26 @@ const FONTS = [
   { name: 'Comic', family: '"Bangers", system-ui' },
 ];
 
+// Default shadow object structure
+const DEFAULT_SHADOW = { x: 0, y: 0, blur: 0, color: '#000000' };
+
 // --- DEFAULT DATA ---
 const INITIAL_FRAMES = [
-  { id: 101, text: "Stop Waiting.", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60 }, wordLayouts: {} },
-  { id: 102, text: "No one is coming to save you.", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48 }, wordLayouts: {} },
-  { id: 103, text: "BUILD IT YOURSELF.", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72 }, wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0, font: '"Anton", sans-serif' } } }
+  { 
+    id: 101, text: "Stop Waiting.", duration: 1.5, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
+    layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 60, shadow: { ...DEFAULT_SHADOW, y: 4, blur: 10 } }, 
+    wordLayouts: {} 
+  },
+  { 
+    id: 102, text: "No one is coming to save you.", duration: 3, theme: THEMES[0], animation: ANIMATIONS[0].id, align: 'center', 
+    layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 48, shadow: DEFAULT_SHADOW }, 
+    wordLayouts: {} 
+  },
+  { 
+    id: 103, text: "BUILD IT YOURSELF.", duration: 2, theme: THEMES[2], animation: ANIMATIONS[0].id, align: 'center', 
+    layout: { x: 0, y: 0, scale: 1.2, rotation: 0, fontSize: 72, shadow: DEFAULT_SHADOW }, 
+    wordLayouts: { 0: { curve: 40, scale: 1, rotation: 0, x:0, y:0, font: '"Anton", sans-serif', shadow: DEFAULT_SHADOW } } 
+  }
 ];
 
 // --- 2. HELPER FUNCTIONS ---
@@ -93,6 +107,12 @@ const TransformableText = ({
   const fontSize = layout.fontSize || 40;
   const words = text.split(' ').filter(w => w.trim());
 
+  // Scene level shadow
+  const sceneShadow = layout.shadow || DEFAULT_SHADOW;
+  const sceneShadowStyle = sceneShadow.blur > 0 || sceneShadow.x !== 0 || sceneShadow.y !== 0 
+    ? `${sceneShadow.x}px ${sceneShadow.y}px ${sceneShadow.blur}px ${sceneShadow.color}` 
+    : 'none';
+
   return (
     <div className="flex items-center justify-center w-full h-full pointer-events-none">
       <div 
@@ -103,18 +123,29 @@ const TransformableText = ({
         }}
       >
         <div 
-            className={`drop-shadow-2xl font-black ${getAlignmentClass(align)} select-none`}
-            style={{ fontSize: `${fontSize}px`, lineHeight: 1.2 }}
+            className={`font-black ${getAlignmentClass(align)} select-none`}
+            style={{ 
+                fontSize: `${fontSize}px`, 
+                lineHeight: 1.2,
+                // Apply scene shadow here so it applies to everything unless overridden
+                textShadow: sceneShadowStyle 
+            }}
         >
           <div className={`flex flex-wrap gap-x-[0.3em] gap-y-1 w-full ${align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center'}`}>
             {words.map((word, i) => {
-                const wl = wordLayouts[i] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0, font: null };
+                const wl = wordLayouts[i] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0, font: null, shadow: null };
                 const isSelected = activeTool === 'word' && selectedWordIndex === i;
                 const themeClass = i % 2 !== 0 ? theme.accent : theme.text;
                 const wordCurve = wl.curve || 0;
                 
-                // --- FONT LOGIC HERE ---
+                // Word specific logic
                 const fontFamily = wl.font || 'inherit';
+                const wordShadow = wl.shadow; 
+                
+                // Construct shadow style for word. If word has shadow, use it, otherwise inherit scene shadow
+                const wordShadowStyle = wordShadow 
+                    ? `${wordShadow.x}px ${wordShadow.y}px ${wordShadow.blur}px ${wordShadow.color}` 
+                    : undefined; // undefined allows inheritance
 
                 return (
                     <span 
@@ -144,7 +175,8 @@ const TransformableText = ({
                           `}
                           style={{
                             color: wl.color ? wl.color : undefined,
-                            fontFamily: fontFamily, // APPLY FONT HERE
+                            fontFamily: fontFamily, 
+                            textShadow: wordShadowStyle, // Apply individual shadow override
                             animationDelay: isPlaying ? `${i * 0.15}s` : '0s',
                             animationFillMode: 'forwards'
                           }}>
@@ -183,6 +215,49 @@ const TransformableText = ({
     </div>
   );
 };
+
+// --- SHADOW CONTROLS COMPONENT (Reusable) ---
+const ShadowControls = ({ shadow, onChange, label = "Shadow" }) => {
+    const s = shadow || DEFAULT_SHADOW;
+    
+    const update = (key, val) => {
+        onChange({ ...s, [key]: val });
+    };
+
+    return (
+        <div className="bg-black/20 rounded-lg p-3 space-y-3 border border-white/5">
+            <div className="flex items-center justify-between">
+                <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1">
+                    <Layers size={10} className="text-blue-400"/> {label}
+                </label>
+                <div className="flex gap-2">
+                    <input 
+                        type="color" 
+                        value={s.color} 
+                        onChange={(e) => update('color', e.target.value)}
+                        className="w-4 h-4 rounded cursor-pointer bg-transparent border-none p-0"
+                    />
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] text-gray-500"><span>X</span> <span>{s.x}</span></div>
+                    <input type="range" min="-20" max="20" value={s.x} onChange={(e) => update('x', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
+                </div>
+                <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] text-gray-500"><span>Y</span> <span>{s.y}</span></div>
+                    <input type="range" min="-20" max="20" value={s.y} onChange={(e) => update('y', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
+                </div>
+            </div>
+             <div className="space-y-1">
+                <div className="flex justify-between text-[10px] text-gray-500"><span>Blur</span> <span>{s.blur}px</span></div>
+                <input type="range" min="0" max="30" value={s.blur} onChange={(e) => update('blur', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-blue-500"/>
+            </div>
+        </div>
+    );
+};
+
 
 // --- SCENE EDITOR COMPONENT ---
 const SceneEditor = ({ frame, onUpdate, onClose }) => {
@@ -240,7 +315,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
 
   const updateSelectedWord = (prop, value) => {
     if (selectedWordIndex === null) return;
-    const existing = frame.wordLayouts[selectedWordIndex] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0, font: null };
+    const existing = frame.wordLayouts[selectedWordIndex] || { x: 0, y: 0, scale: 1, rotation: 0, color: null, curve: 0, font: null, shadow: null };
     const newVal = { ...existing, [prop]: value };
     onUpdate(frame.id, 'wordLayouts', { ...frame.wordLayouts, [selectedWordIndex]: newVal });
   };
@@ -265,7 +340,8 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
   // Helper to prevent double transform in editor
   const innerLayout = { 
       x: 0, y: 0, scale: 1, rotation: 0, 
-      fontSize: frame.layout.fontSize
+      fontSize: frame.layout.fontSize,
+      shadow: frame.layout.shadow // pass shadow
   };
 
   return (
@@ -325,6 +401,13 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                       <div className="flex justify-between text-xs text-gray-400"><span>Rotation</span> <span>{frame.layout.rotation}°</span></div>
                       <input type="range" min="-180" max="180" step="5" value={frame.layout.rotation} onChange={(e) => onUpdate(frame.id, 'layout', {...frame.layout, rotation: parseInt(e.target.value)})} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-purple-500"/>
                   </div>
+
+                  {/* SCENE SHADOW CONTROLS */}
+                  <ShadowControls 
+                    label="Scene Shadow"
+                    shadow={frame.layout.shadow} 
+                    onChange={(newShadow) => onUpdate(frame.id, 'layout', { ...frame.layout, shadow: newShadow })}
+                  />
                </div>
            )}
 
@@ -346,7 +429,7 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                              <button onClick={resetWord} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"><RefreshCcw size={10}/> Reset</button>
                           </div>
                           
-                          {/* FONT SELECTOR - NEW */}
+                          {/* FONT SELECTOR */}
                           <div className="space-y-2">
                              <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1"><Type size={10}/> Font Family</label>
                              <div className="grid grid-cols-2 gap-2">
@@ -422,6 +505,16 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
                                   <input type="range" min="-180" max="180" step="5" value={frame.wordLayouts[selectedWordIndex]?.rotation || 0} onChange={(e) => updateSelectedWord('rotation', parseInt(e.target.value))} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-green-500"/>
                               </div>
                           </div>
+                          
+                          <div className="h-px bg-white/5 my-1"></div>
+
+                          {/* WORD SPECIFIC SHADOW */}
+                          <ShadowControls 
+                            label="Word Shadow"
+                            shadow={frame.wordLayouts[selectedWordIndex]?.shadow} 
+                            onChange={(newShadow) => updateSelectedWord('shadow', newShadow)}
+                          />
+
                       </div>
                   )}
                </div>
@@ -461,7 +554,6 @@ const SceneEditor = ({ frame, onUpdate, onClose }) => {
         <div className="flex-1 flex items-center justify-center p-4 lg:p-8 overflow-hidden">
           <div ref={containerRef} className="aspect-video w-full max-w-[1000px] border border-white/10 bg-black relative shadow-2xl overflow-hidden group touch-none">
               
-             {/* BACKGROUND RENDERING - IMAGE LOGIC REMOVED */}
              <div className={`absolute inset-0 transition-colors duration-300 ${frame.theme.bg}`}>
                  <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
              </div>
@@ -591,7 +683,7 @@ export default function App() {
       theme: lastFrame ? lastFrame.theme : THEMES[0],
       animation: lastFrame ? lastFrame.animation : ANIMATIONS[0].id,
       align: lastFrame ? lastFrame.align : 'center',
-      layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 40 },
+      layout: { x: 0, y: 0, scale: 1, rotation: 0, fontSize: 40, shadow: DEFAULT_SHADOW },
       wordLayouts: {}
     }]);
     setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
@@ -646,7 +738,8 @@ export default function App() {
   // Helper for preview double transform prevention
   const activeInnerLayout = {
       x: 0, y: 0, scale: 1, rotation: 0,
-      fontSize: activeFrame.layout.fontSize
+      fontSize: activeFrame.layout.fontSize,
+      shadow: activeFrame.layout.shadow // pass shadow
   };
 
   return (
@@ -776,7 +869,6 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 pl-9">
-                    {/* IMAGE INPUT REMOVED FROM HERE */}
                     <div className="flex items-center gap-2 bg-black/20 rounded-md px-2 py-1.5 border border-white/5 w-full">
                       <Clock className="w-3 h-3 text-gray-500" />
                       <input type="range" min="0.5" max="10" step="0.5" value={frame.duration} onChange={(e) => handleUpdateFrame(frame.id, 'duration', parseFloat(e.target.value))} className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
@@ -809,7 +901,6 @@ export default function App() {
               <div className="flex-1 flex items-center justify-center overflow-hidden">
                 <div className={`relative transition-all duration-500 ease-in-out bg-black rounded-[1rem] border-4 border-gray-800 shadow-2xl overflow-hidden flex flex-col aspect-video w-full max-w-[800px] ${isPlaying ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}`}>
                   
-                  {/* MAIN PREVIEW BACKGROUND - IMAGE LOGIC REMOVED */}
                   <div className={`flex-1 w-full h-full flex flex-col items-center justify-center relative transition-colors duration-300 ${activeTheme.bg} ${getAlignmentClass(activeFrame.align)}`}>
                     
                     <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
